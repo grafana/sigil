@@ -6,6 +6,7 @@ import type { DashboardDataSource } from '../dashboard/api';
 import type { PrometheusQueryResponse } from '../dashboard/types';
 
 const mockDashboardToolsGrid = jest.fn<void, [unknown]>();
+const mockDashboardPerformanceGrid = jest.fn<void, [unknown]>();
 
 // ResizeObserver is not available in JSDOM.
 beforeAll(() => {
@@ -86,6 +87,13 @@ jest.mock('../components/dashboard/DashboardToolsGrid', () => ({
   },
 }));
 
+jest.mock('../components/dashboard/DashboardPerformanceGrid', () => ({
+  DashboardPerformanceGrid: (props: unknown) => {
+    mockDashboardPerformanceGrid(props);
+    return <div data-testid="dashboard-performance-grid" />;
+  },
+}));
+
 const emptyVector: PrometheusQueryResponse = {
   status: 'success',
   data: { resultType: 'vector', result: [] },
@@ -130,6 +138,7 @@ function renderWithRouter(ds: MockDashboardDataSource, initialEntry = '/') {
 describe('DashboardPage', () => {
   beforeEach(() => {
     mockDashboardToolsGrid.mockClear();
+    mockDashboardPerformanceGrid.mockClear();
   });
 
   it('renders filter bar and paired metric rows', async () => {
@@ -231,6 +240,23 @@ describe('DashboardPage', () => {
     expect(mockDashboardToolsGrid.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         breakdownBy: 'tool',
+      })
+    );
+  });
+
+  it('normalizes a stale tool breakdown on non-tools tabs', async () => {
+    const ds = createDataSource();
+    await act(async () => {
+      renderWithRouter(ds, '/?tab=performance&breakdownBy=tool');
+    });
+
+    await waitFor(() => {
+      expect(mockDashboardPerformanceGrid).toHaveBeenCalled();
+    });
+
+    expect(mockDashboardPerformanceGrid.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        breakdownBy: 'agent',
       })
     );
   });

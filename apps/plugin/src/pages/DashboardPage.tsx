@@ -57,7 +57,13 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
-  const effectiveBreakdownBy = tab === 'tools' ? normalizeToolAnalyticsBreakdown(breakdownBy) : breakdownBy;
+  const effectiveBreakdownBy = useMemo(() => {
+    if (tab === 'tools') {
+      return normalizeToolAnalyticsBreakdown(breakdownBy);
+    }
+
+    return breakdownBy === 'tool' ? 'agent' : breakdownBy;
+  }, [breakdownBy, tab]);
 
   const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } = useCascadingFilterOptions(
     dataSource,
@@ -119,7 +125,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         <DashboardPerformanceGrid
           dataSource={dataSource}
           filters={filters}
-          breakdownBy={breakdownBy}
+          breakdownBy={effectiveBreakdownBy}
           from={from}
           to={to}
           timeRange={timeRange}
@@ -130,7 +136,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         <DashboardErrorsGrid
           dataSource={dataSource}
           filters={filters}
-          breakdownBy={breakdownBy}
+          breakdownBy={effectiveBreakdownBy}
           from={from}
           to={to}
           timeRange={timeRange}
@@ -141,7 +147,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         <DashboardUsageGrid
           dataSource={dataSource}
           filters={filters}
-          breakdownBy={breakdownBy}
+          breakdownBy={effectiveBreakdownBy}
           from={from}
           to={to}
           timeRange={timeRange}
@@ -163,7 +169,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         <DashboardEvalGrid
           dataSource={dataSource}
           filters={filters}
-          breakdownBy={breakdownBy}
+          breakdownBy={effectiveBreakdownBy}
           from={from}
           to={to}
           timeRange={timeRange}
