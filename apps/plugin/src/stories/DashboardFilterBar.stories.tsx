@@ -138,6 +138,5 @@ export const ToolsTab = {
   args: {
     hideBreakdown: true,
     hideProviderFilter: true,
-    hideModelFilter: true,
   },
 };

@@ -102,19 +102,17 @@ describe('DashboardFilterBar', () => {
     );
   });
 
-  it('passes custom breakdown options and model-filter visibility for specialized tabs', () => {
+  it('passes custom breakdown options through for specialized tabs', () => {
     renderToolbar(true, {
       breakdownOptions: [
         { label: 'None', value: 'none' },
         { label: 'Agent', value: 'agent' },
         { label: 'Tool', value: 'tool' },
       ],
-      hideModelFilter: true,
     });
 
     const props = mockFilterToolbar.mock.calls.at(-1)?.[0] as {
       children?: React.ReactElement<{ options?: Array<{ label: string; value: string }> }>;
-      hideModelFilter?: boolean;
     };
 
     expect(props.children?.props.options).toEqual([
@@ -122,6 +120,5 @@ describe('DashboardFilterBar', () => {
       { label: 'Agent', value: 'agent' },
       { label: 'Tool', value: 'tool' },
     ]);
-    expect(props.hideModelFilter).toBe(true);
   });
 });

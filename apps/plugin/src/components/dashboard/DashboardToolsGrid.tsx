@@ -23,9 +23,10 @@ import {
   readToolMetricMap,
   type ToolSummaryRow,
 } from '../../dashboard/toolRuntimeTable';
-import { buildToolsUrl } from '../../dashboard/url';
+import { buildToolAnalyticsUrl, buildToolsUrl } from '../../dashboard/url';
 import { matrixToDataFrames, vectorToStatValue } from '../../dashboard/transforms';
 import { BreakdownStatPanel, formatWindowLabel } from './dashboardShared';
+import { buildAgentDetailHref } from './ViewAgentsLink';
 import {
   computeRangeDuration,
   computeRateInterval,
@@ -83,6 +84,17 @@ export function DashboardToolsGrid({
   const metricFilters = useMemo(() => buildExecuteToolMetricFilters(sanitizedFilters), [sanitizedFilters]);
   const chartBreakdownBy = useMemo(() => normalizeToolAnalyticsBreakdown(breakdownBy), [breakdownBy]);
   const statsBreakdownBy = useMemo(() => resolveToolAnalyticsStatBreakdown(breakdownBy), [breakdownBy]);
+  const breakdownItemHref = useMemo(() => {
+    switch (statsBreakdownBy) {
+      case 'agent':
+        return buildAgentDetailHref;
+      case 'tool':
+      case 'none':
+        return (name: string) => buildToolAnalyticsUrl(timeRange, sanitizedFilters, name);
+      default:
+        return undefined;
+    }
+  }, [sanitizedFilters, statsBreakdownBy, timeRange]);
   const windowSize = useMemo(() => Math.max(0, to - from), [from, to]);
   const prevFrom = useMemo(() => Math.max(0, from - windowSize), [from, windowSize]);
   const prevTo = useMemo(() => from, [from]);
@@ -521,6 +533,7 @@ export function DashboardToolsGrid({
             error={breakdownExecutions.error}
             breakdownLabel={breakdownLabel}
             height={CHART_HEIGHT}
+            getItemHref={breakdownItemHref}
           />
         </div>
 
@@ -556,6 +569,7 @@ export function DashboardToolsGrid({
             error={breakdownErrors.error}
             breakdownLabel={breakdownLabel}
             height={CHART_HEIGHT}
+            getItemHref={breakdownItemHref}
           />
         </div>
 
@@ -592,6 +606,7 @@ export function DashboardToolsGrid({
             height={CHART_HEIGHT}
             unit="s"
             aggregation="avg"
+            getItemHref={breakdownItemHref}
           />
         </div>
       </div>

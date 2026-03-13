@@ -37,44 +37,44 @@ function createDataSource(): MockDashboardDataSource {
           data: {
             resultType: 'vector',
             result: [
-              { metric: { gen_ai_request_model: 'calendar.lookup' }, value: [1, '0.42'] as [number, string] },
-              { metric: { gen_ai_request_model: 'weather.lookup' }, value: [1, '0.88'] as [number, string] },
+              { metric: { gen_ai_tool_name: 'calendar.lookup' }, value: [1, '0.42'] as [number, string] },
+              { metric: { gen_ai_tool_name: 'weather.lookup' }, value: [1, '0.88'] as [number, string] },
             ],
           },
         };
       }
-      if (query.includes('* 100') && query.includes('sum by (gen_ai_request_model)')) {
+      if (query.includes('* 100') && query.includes('sum by (gen_ai_tool_name)')) {
         return {
           status: 'success',
           data: {
             resultType: 'vector',
             result: [
-              { metric: { gen_ai_request_model: 'calendar.lookup' }, value: [1, '4.5'] as [number, string] },
-              { metric: { gen_ai_request_model: 'weather.lookup' }, value: [1, '1.2'] as [number, string] },
+              { metric: { gen_ai_tool_name: 'calendar.lookup' }, value: [1, '4.5'] as [number, string] },
+              { metric: { gen_ai_tool_name: 'weather.lookup' }, value: [1, '1.2'] as [number, string] },
             ],
           },
         };
       }
-      if (query.includes('error_type!=""') && query.includes('sum by (gen_ai_request_model)')) {
+      if (query.includes('error_type!=""') && query.includes('sum by (gen_ai_tool_name)')) {
         return {
           status: 'success',
           data: {
             resultType: 'vector',
             result: [
-              { metric: { gen_ai_request_model: 'calendar.lookup' }, value: [1, '3'] as [number, string] },
-              { metric: { gen_ai_request_model: 'weather.lookup' }, value: [1, '1'] as [number, string] },
+              { metric: { gen_ai_tool_name: 'calendar.lookup' }, value: [1, '3'] as [number, string] },
+              { metric: { gen_ai_tool_name: 'weather.lookup' }, value: [1, '1'] as [number, string] },
             ],
           },
         };
       }
-      if (query.includes('sum by (gen_ai_request_model)')) {
+      if (query.includes('sum by (gen_ai_tool_name)')) {
         return {
           status: 'success',
           data: {
             resultType: 'vector',
             result: [
-              { metric: { gen_ai_request_model: 'calendar.lookup' }, value: [1, '42'] as [number, string] },
-              { metric: { gen_ai_request_model: 'weather.lookup' }, value: [1, '18'] as [number, string] },
+              { metric: { gen_ai_tool_name: 'calendar.lookup' }, value: [1, '42'] as [number, string] },
+              { metric: { gen_ai_tool_name: 'weather.lookup' }, value: [1, '18'] as [number, string] },
             ],
           },
         };
@@ -187,5 +187,19 @@ describe('ToolsPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('location-search')).toHaveTextContent('');
     });
+  });
+
+  it('keeps the model filter visible on tool pages', async () => {
+    const dataSource = createDataSource();
+
+    await act(async () => {
+      render(
+        <MemoryRouter initialEntries={['/analytics/tools?model=gpt-4o']}>
+          <ToolsPage dataSource={dataSource} />
+        </MemoryRouter>
+      );
+    });
+
+    expect(screen.getByText('gpt-4o')).toBeInTheDocument();
   });
 });

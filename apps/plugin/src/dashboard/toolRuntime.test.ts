@@ -6,7 +6,7 @@ import {
 } from './toolRuntime';
 
 describe('sanitizeToolAnalyticsFilters', () => {
-  it('drops model filters and tool metric labels from tool analytics state', () => {
+  it('keeps model filters and removes only tool metric labels from tool analytics state', () => {
     const sanitized = sanitizeToolAnalyticsFilters({
       providers: ['openai'],
       models: ['gpt-4o'],
@@ -19,7 +19,7 @@ describe('sanitizeToolAnalyticsFilters', () => {
 
     expect(sanitized).toEqual({
       providers: ['openai'],
-      models: [],
+      models: ['gpt-4o'],
       agentNames: ['assistant'],
       labelFilters: [{ key: 'service_name', operator: '=', value: 'sigil' }],
     });

@@ -400,6 +400,7 @@ export function BreakdownStatPanel({
   }
 
   if (items.length === 1) {
+    const singleItem = items[0];
     return (
       <div className={styles.bspPanel} style={{ height }}>
         <div className={styles.bspHeader}>
@@ -408,7 +409,25 @@ export function BreakdownStatPanel({
         <div className={styles.bspCenter}>
           <div style={{ textAlign: 'center' }}>
             <span className={styles.bspBigValue}>{formatVal(aggregate)}</span>
-            {items[0].name !== 'unknown' && <div className={styles.bspSingleLabel}>{items[0].name}</div>}
+            {singleItem.name !== 'unknown' &&
+              (onItemClick ? (
+                <button
+                  type="button"
+                  className={`${styles.bspSingleLabel} ${styles.bspBarNameClickable}`}
+                  onClick={(e) => onItemClick(singleItem.name, e)}
+                >
+                  {singleItem.name}
+                </button>
+              ) : getItemHref ? (
+                <a
+                  href={getItemHref(singleItem.name)}
+                  className={`${styles.bspSingleLabel} ${styles.bspBarNameClickable}`}
+                >
+                  {singleItem.name}
+                </a>
+              ) : (
+                <div className={styles.bspSingleLabel}>{singleItem.name}</div>
+              ))}
           </div>
         </div>
       </div>

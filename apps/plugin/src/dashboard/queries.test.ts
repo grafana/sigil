@@ -281,20 +281,20 @@ describe('stat query builders', () => {
   });
 
   it('topToolExecutionsQuery filters to execute_tool and groups by tool name label', () => {
-    expect(topToolExecutionsQuery(withFilters, '3600s')).toContain('sum by (gen_ai_request_model)');
+    expect(topToolExecutionsQuery(withFilters, '3600s')).toContain('sum by (gen_ai_tool_name)');
     expect(topToolExecutionsQuery(withFilters, '3600s')).toContain('gen_ai_operation_name="execute_tool"');
   });
 
   it('topToolErrorsQuery filters to execute_tool errors by tool name', () => {
     const query = topToolErrorsQuery(noFilters, '3600s');
-    expect(query).toContain('sum by (gen_ai_request_model)');
+    expect(query).toContain('sum by (gen_ai_tool_name)');
     expect(query).toContain('error_type!=""');
     expect(query).toContain('gen_ai_operation_name="execute_tool"');
   });
 
   it('topToolErrorRateQuery filters to execute_tool and computes percent by tool', () => {
     const query = topToolErrorRateQuery(noFilters, '3600s');
-    expect(query).toContain('sum by (gen_ai_request_model)');
+    expect(query).toContain('sum by (gen_ai_tool_name)');
     expect(query).toContain('* 100');
     expect(query).toContain('gen_ai_operation_name="execute_tool"');
   });
@@ -302,7 +302,7 @@ describe('stat query builders', () => {
   it('topToolLatencyQuery computes tool latency quantiles from execute_tool buckets', () => {
     const query = topToolLatencyQuery(noFilters, '3600s', 0.95);
     expect(query).toContain('histogram_quantile(0.95');
-    expect(query).toContain('sum by (le, gen_ai_request_model)');
+    expect(query).toContain('sum by (le, gen_ai_tool_name)');
     expect(query).toContain('gen_ai_operation_name="execute_tool"');
   });
 
