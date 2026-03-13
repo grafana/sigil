@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
-import type { GrafanaTheme2 } from '@grafana/data';
+import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Alert, Badge, Button, Icon, Spinner, Tab, TabsBar, Text, Tooltip, useStyles2, useTheme2 } from '@grafana/ui';
 import { defaultAgentsDataSource, type AgentsDataSource } from '../agents/api';
 import {
   DEFAULT_LOOKBACK,
   type AgentDetail,
+  type AgentRuntimeContextResponse,
   type AgentRatingResponse,
   type AgentVersionListItem,
   type PromptInsightsResponse,
@@ -41,6 +42,13 @@ import { PromptDiffView } from '../components/agents/PromptDiffView';
 import { normalizeValuesToHeights } from '../utils/seriesBuckets';
 import { buildCursorPromptDeeplink } from '../ide/ideUtils';
 import { CursorLogo } from '../components/landing/IDELogos';
+import { AgentAttributeFilterBar } from '../components/filters/AgentAttributeFilterBar';
+import {
+  buildAgentAttributeFilterExpression,
+  parseAgentAttributeFilters,
+  rankAgentSearchTags,
+  writeAgentAttributeFilters,
+} from '../agents/attributeFilters';
 
 const VERSION_PAGE_SIZE = 50;
 const RECENT_VERSIONS_COUNT = 8;
@@ -503,6 +511,84 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
   plainPanelBody: css({
     padding: theme.spacing(1.25),
+  }),
+  runtimePanelBody: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(1.25),
+    padding: theme.spacing(1.25),
+  }),
+  runtimeMetaGrid: css({
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    gap: theme.spacing(1),
+    '@media (max-width: 900px)': {
+      gridTemplateColumns: '1fr',
+    },
+  }),
+  runtimeMetaStat: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.25),
+    padding: theme.spacing(1),
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.secondary,
+  }),
+  runtimeMetaLabel: css({
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.03em',
+  }),
+  runtimeMetaValue: css({
+    color: theme.colors.text.primary,
+    fontSize: theme.typography.body.fontSize,
+    fontWeight: theme.typography.fontWeightMedium,
+  }),
+  runtimeGroupsGrid: css({
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: theme.spacing(1),
+  }),
+  runtimeGroupCard: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.75),
+    padding: theme.spacing(1),
+    borderRadius: theme.shape.radius.default,
+    border: `1px solid ${theme.colors.border.weak}`,
+    background: theme.colors.background.secondary,
+  }),
+  runtimeGroupKey: css({
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
+    fontFamily: theme.typography.fontFamilyMonospace,
+  }),
+  runtimeValueList: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.5),
+  }),
+  runtimeValueRow: css({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(1),
+    minWidth: 0,
+  }),
+  runtimeValueName: css({
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  }),
+  runtimeValueCount: css({
+    color: theme.colors.text.secondary,
+    fontVariantNumeric: 'tabular-nums',
+  }),
+  runtimeEmpty: css({
+    color: theme.colors.text.secondary,
   }),
   versionsPanelBody: css({
     paddingLeft: theme.spacing(2),
@@ -1031,6 +1117,11 @@ export default function AgentDetailPage({
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   const [versions, setVersions] = useState<AgentVersionListItem[]>([]);
   const [versionsCursor, setVersionsCursor] = useState('');
+  const [runtimeContext, setRuntimeContext] = useState<AgentRuntimeContextResponse | null>(null);
+  const [runtimeContextLoading, setRuntimeContextLoading] = useState(false);
+  const [runtimeContextError, setRuntimeContextError] = useState('');
+  const [tagOptions, setTagOptions] = useState<Array<SelectableValue<string>>>([]);
+  const [tagsLoading, setTagsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [initialRatingLoading, setInitialRatingLoading] = useState(false);
@@ -1051,10 +1142,34 @@ export default function AgentDetailPage({
   const versionPickerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedVersion = searchParams.get('version')?.trim() ?? '';
+  const attributeFilters = useMemo(() => parseAgentAttributeFilters(searchParams), [searchParams]);
   const agentName = buildAgentNameFromRoute(location.pathname, params.agentName);
   const isAnonymous = agentName.length === 0;
-  const agentsTableRoute = `${PLUGIN_BASE}/${ROUTES.Agents}?tab=table`;
+  const agentsTableRoute = useMemo(() => {
+    const next = new URLSearchParams();
+    next.set('tab', 'table');
+    const rawFrom = searchParams.get('from')?.trim();
+    const rawTo = searchParams.get('to')?.trim();
+    if (rawFrom) {
+      next.set('from', rawFrom);
+    }
+    if (rawTo) {
+      next.set('to', rawTo);
+    }
+    for (const filter of attributeFilters) {
+      if (filter.key && filter.value) {
+        next.append('attr', `${filter.key}|${filter.operator}|${filter.value}`);
+      }
+    }
+    return `${PLUGIN_BASE}/${ROUTES.Agents}?${next.toString()}`;
+  }, [attributeFilters, searchParams]);
   const activeVersion = selectedVersion.length > 0 ? selectedVersion : (detail?.effective_version ?? '');
+  const runtimeFilterExpression = useMemo(
+    () => buildAgentAttributeFilterExpression(attributeFilters),
+    [attributeFilters]
+  );
+  const runtimeFrom = searchParams.get('from')?.trim() || detail?.first_seen_at || '';
+  const runtimeTo = searchParams.get('to')?.trim() || detail?.last_seen_at || '';
 
   useEffect(() => {
     detailRequestVersion.current += 1;
@@ -1167,6 +1282,81 @@ export default function AgentDetailPage({
         setLoadingVersions(false);
       });
   }, [agentName, dataSource]);
+
+  useEffect(() => {
+    if (!dataSource.getSearchTags || runtimeFrom.length === 0 || runtimeTo.length === 0) {
+      setTagOptions([]);
+      setTagsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setTagsLoading(true);
+    void dataSource
+      .getSearchTags(runtimeFrom, runtimeTo)
+      .then((tags) => {
+        if (!cancelled) {
+          setTagOptions(rankAgentSearchTags(tags));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTagOptions([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setTagsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dataSource, runtimeFrom, runtimeTo]);
+
+  useEffect(() => {
+    if (!detail || !dataSource.getAgentRuntimeContext || runtimeFrom.length === 0 || runtimeTo.length === 0) {
+      setRuntimeContext(null);
+      setRuntimeContextLoading(false);
+      setRuntimeContextError('');
+      return;
+    }
+
+    let cancelled = false;
+    setRuntimeContextLoading(true);
+    setRuntimeContextError('');
+    void dataSource
+      .getAgentRuntimeContext({
+        agent_name: agentName,
+        effective_version: activeVersion || undefined,
+        filters: runtimeFilterExpression,
+        time_range: {
+          from: runtimeFrom,
+          to: runtimeTo,
+        },
+      })
+      .then((response) => {
+        if (!cancelled) {
+          setRuntimeContext(response);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setRuntimeContext(null);
+          setRuntimeContextError(err instanceof Error ? err.message : 'Failed to load runtime context');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setRuntimeContextLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeVersion, agentName, dataSource, detail, runtimeFilterExpression, runtimeFrom, runtimeTo]);
 
   useEffect(() => {
     if (agentName.length === 0) {
@@ -1325,6 +1515,23 @@ export default function AgentDetailPage({
         setErrorMessage(err instanceof Error ? err.message : 'Failed to load version ratings');
       });
   }, [agentName, dataSource, recentVersions]);
+
+  const setAttributeFilters = useCallback(
+    (filters: typeof attributeFilters) => {
+      setSearchParams((prev) => writeAgentAttributeFilters(prev, filters), { replace: true });
+    },
+    [setSearchParams]
+  );
+
+  const loadTagValues = useCallback(
+    async (tag: string) => {
+      if (!dataSource.getSearchTagValues || runtimeFrom.length === 0 || runtimeTo.length === 0) {
+        return [];
+      }
+      return dataSource.getSearchTagValues(tag, runtimeFrom, runtimeTo);
+    },
+    [dataSource, runtimeFrom, runtimeTo]
+  );
 
   const selectVersion = (nextVersion: string) => {
     const next = new URLSearchParams(searchParams);
@@ -1928,6 +2135,84 @@ export default function AgentDetailPage({
           </Button>
         </div>
       )}
+
+      <div className={cx(styles.panel, styles.plainPanel)}>
+        <div className={cx(styles.panelHeader, styles.plainPanelHeader)}>
+          <Text weight="medium">Runtime context filters</Text>
+        </div>
+        <div className={styles.runtimePanelBody}>
+          <AgentAttributeFilterBar
+            filters={attributeFilters}
+            tagOptions={tagOptions}
+            tagsLoading={tagsLoading}
+            loadTagValues={loadTagValues}
+            onChange={setAttributeFilters}
+          />
+
+          {runtimeContextError.length > 0 && (
+            <Alert severity="error" title="Runtime context unavailable" onRemove={() => setRuntimeContextError('')}>
+              <Text>{runtimeContextError}</Text>
+            </Alert>
+          )}
+
+          {runtimeContextLoading ? (
+            <div className={styles.loading}>
+              <Spinner />
+            </div>
+          ) : runtimeContext ? (
+            <>
+              <div className={styles.runtimeMetaGrid}>
+                <div className={styles.runtimeMetaStat}>
+                  <span className={styles.runtimeMetaLabel}>Matching generations</span>
+                  <span className={styles.runtimeMetaValue}>
+                    {runtimeContext.matching_generation_count.toLocaleString()}
+                  </span>
+                </div>
+                <div className={styles.runtimeMetaStat}>
+                  <span className={styles.runtimeMetaLabel}>First seen</span>
+                  <span className={styles.runtimeMetaValue}>
+                    {runtimeContext.first_seen_at ? formatDate(runtimeContext.first_seen_at) : 'n/a'}
+                  </span>
+                </div>
+                <div className={styles.runtimeMetaStat}>
+                  <span className={styles.runtimeMetaLabel}>Last seen</span>
+                  <span className={styles.runtimeMetaValue}>
+                    {runtimeContext.last_seen_at ? formatDate(runtimeContext.last_seen_at) : 'n/a'}
+                  </span>
+                </div>
+              </div>
+
+              {runtimeContext.groups.length > 0 ? (
+                <div className={styles.runtimeGroupsGrid}>
+                  {runtimeContext.groups.map((group) => (
+                    <div key={group.key} className={styles.runtimeGroupCard}>
+                      <span className={styles.runtimeGroupKey}>{group.key}</span>
+                      {group.values.length > 0 ? (
+                        <div className={styles.runtimeValueList}>
+                          {group.values.map((value) => (
+                            <div key={`${group.key}:${value.value}`} className={styles.runtimeValueRow}>
+                              <span className={styles.runtimeValueName}>{value.value || '(empty)'}</span>
+                              <span className={styles.runtimeValueCount}>{value.count.toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className={styles.runtimeEmpty}>No observed values.</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className={styles.runtimeEmpty}>
+                  No resource or span attributes matched this filter set in the selected runtime window.
+                </div>
+              )}
+            </>
+          ) : (
+            <div className={styles.runtimeEmpty}>No runtime context available for this agent yet.</div>
+          )}
+        </div>
+      </div>
 
       <div className={styles.mainAreaTabs}>
         <TabsBar>

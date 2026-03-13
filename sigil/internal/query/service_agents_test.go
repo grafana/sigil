@@ -2,10 +2,15 @@ package query
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/grafana/sigil/sigil/internal/agentmeta"
+	sigilv1 "github.com/grafana/sigil/sigil/internal/gen/sigil/v1"
 	"github.com/grafana/sigil/sigil/internal/storage"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestListAgentsForTenantWithCursor(t *testing.T) {
@@ -75,6 +80,221 @@ func TestListAgentsForTenantRejectsCursorFilterMismatch(t *testing.T) {
 	_, _, err = svc.ListAgentsForTenant(context.Background(), "tenant-a", 10, cursor, AgentListFilter{NamePrefix: "assistant"})
 	if err == nil || !IsValidationError(err) {
 		t.Fatalf("expected validation error for mismatched cursor filter, got %v", err)
+	}
+}
+
+func TestSearchAgentsForTenantAppliesAttributeFilters(t *testing.T) {
+	base := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	store := &stubAgentCatalogStore{
+		heads: []storage.AgentHead{
+			{
+				ID:                              1,
+				AgentName:                       "assistant",
+				LatestEffectiveVersion:          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				LatestSeenAt:                    base.Add(-5 * time.Minute),
+				FirstSeenAt:                     base.Add(-2 * time.Hour),
+				GenerationCount:                 5,
+				VersionCount:                    2,
+				LatestToolCount:                 1,
+				LatestSystemPromptPrefix:        "You are concise.",
+				LatestTokenEstimateSystemPrompt: 5,
+				LatestTokenEstimateToolsTotal:   2,
+				LatestTokenEstimateTotal:        7,
+			},
+			{
+				ID:                              2,
+				AgentName:                       "builder",
+				LatestEffectiveVersion:          "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				LatestSeenAt:                    base.Add(-10 * time.Minute),
+				FirstSeenAt:                     base.Add(-3 * time.Hour),
+				GenerationCount:                 3,
+				VersionCount:                    1,
+				LatestToolCount:                 2,
+				LatestSystemPromptPrefix:        "You are a builder.",
+				LatestTokenEstimateSystemPrompt: 4,
+				LatestTokenEstimateToolsTotal:   4,
+				LatestTokenEstimateTotal:        8,
+			},
+		},
+	}
+	tempoClient := &stubTempoClient{
+		searchResponses: []*TempoSearchResponse{{
+			Traces: []TempoTrace{
+				{
+					TraceID:           "trace-1",
+					StartTimeUnixNano: strconvFormatInt(base.Add(-15 * time.Minute).UnixNano()),
+					SpanSets: []TempoSpanSet{{
+						Spans: []TempoSpan{
+							{
+								SpanID:            "span-1",
+								StartTimeUnixNano: strconvFormatInt(base.Add(-15 * time.Minute).UnixNano()),
+								DurationNanos:     strconvFormatInt((2 * time.Second).Nanoseconds()),
+								Attributes: []TempoAttribute{
+									stringTempoAttr("span.gen_ai.conversation.id", "conv-1"),
+									stringTempoAttr("span.sigil.generation.id", "gen-1"),
+									stringTempoAttr("span.gen_ai.agent.name", "assistant"),
+									stringTempoAttr("resource.k8s.namespace.name", "prod"),
+								},
+							},
+						},
+					}},
+				},
+			},
+		}},
+	}
+	svc, err := NewServiceWithDependencies(ServiceDependencies{
+		AgentCatalogStore: store,
+	})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	svc.SetTempoClient(tempoClient)
+
+	items, nextCursor, err := svc.SearchAgentsForTenant(context.Background(), "tenant-a", AgentSearchRequest{
+		Filters:   `resource.k8s.namespace.name = "prod"`,
+		TimeRange: ConversationSearchTimeRange{From: base.Add(-24 * time.Hour), To: base},
+		PageSize:  10,
+	})
+	if err != nil {
+		t.Fatalf("search agents: %v", err)
+	}
+	if nextCursor != "" {
+		t.Fatalf("expected no continuation cursor, got %q", nextCursor)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one matching agent, got %d", len(items))
+	}
+	if items[0].AgentName != "assistant" {
+		t.Fatalf("unexpected matching agent %#v", items[0])
+	}
+	if len(tempoClient.searchRequests) != 1 {
+		t.Fatalf("expected one tempo search request, got %d", len(tempoClient.searchRequests))
+	}
+	if !strings.Contains(tempoClient.searchRequests[0].Query, `resource.k8s.namespace.name = "prod"`) {
+		t.Fatalf("expected namespace filter in query, got %q", tempoClient.searchRequests[0].Query)
+	}
+}
+
+func TestSearchAgentsForTenantRejectsNonAttributeFilters(t *testing.T) {
+	svc, err := NewServiceWithDependencies(ServiceDependencies{
+		AgentCatalogStore: &stubAgentCatalogStore{},
+	})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	svc.SetTempoClient(&stubTempoClient{})
+
+	_, _, err = svc.SearchAgentsForTenant(context.Background(), "tenant-a", AgentSearchRequest{
+		Filters:   `service = "sigil-api"`,
+		TimeRange: ConversationSearchTimeRange{From: time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC), To: time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)},
+		PageSize:  10,
+	})
+	if err == nil || !IsValidationError(err) {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+}
+
+func TestGetAgentRuntimeContextForTenantFiltersByEffectiveVersion(t *testing.T) {
+	base := time.Date(2026, 3, 4, 12, 0, 0, 0, time.UTC)
+	firstGeneration := &sigilv1.Generation{
+		Id:           "gen-1",
+		AgentName:    "assistant",
+		SystemPrompt: "Prompt A",
+		CompletedAt:  timestamppb.New(base.Add(-30 * time.Minute)),
+	}
+	secondGeneration := &sigilv1.Generation{
+		Id:           "gen-2",
+		AgentName:    "assistant",
+		SystemPrompt: "Prompt B",
+		CompletedAt:  timestamppb.New(base.Add(-20 * time.Minute)),
+	}
+	firstDescriptor, err := agentmeta.BuildDescriptor(firstGeneration)
+	if err != nil {
+		t.Fatalf("first descriptor: %v", err)
+	}
+
+	tempoClient := &stubTempoClient{
+		searchResponses: []*TempoSearchResponse{{
+			Traces: []TempoTrace{
+				{
+					TraceID:           "trace-1",
+					StartTimeUnixNano: strconvFormatInt(base.Add(-30 * time.Minute).UnixNano()),
+					SpanSets: []TempoSpanSet{{
+						Spans: []TempoSpan{
+							{
+								SpanID:            "span-1",
+								StartTimeUnixNano: strconvFormatInt(base.Add(-30 * time.Minute).UnixNano()),
+								DurationNanos:     strconvFormatInt((time.Second).Nanoseconds()),
+								Attributes: []TempoAttribute{
+									stringTempoAttr("span.gen_ai.conversation.id", "conv-1"),
+									stringTempoAttr("span.sigil.generation.id", "gen-1"),
+									stringTempoAttr("span.gen_ai.agent.name", "assistant"),
+									stringTempoAttr("resource.k8s.namespace.name", "prod"),
+									stringTempoAttr("resource.k8s.cluster.name", "cluster-a"),
+									stringTempoAttr("resource.service.name", "sigil-api"),
+								},
+							},
+						},
+					}},
+				},
+				{
+					TraceID:           "trace-2",
+					StartTimeUnixNano: strconvFormatInt(base.Add(-20 * time.Minute).UnixNano()),
+					SpanSets: []TempoSpanSet{{
+						Spans: []TempoSpan{
+							{
+								SpanID:            "span-2",
+								StartTimeUnixNano: strconvFormatInt(base.Add(-20 * time.Minute).UnixNano()),
+								DurationNanos:     strconvFormatInt((time.Second).Nanoseconds()),
+								Attributes: []TempoAttribute{
+									stringTempoAttr("span.gen_ai.conversation.id", "conv-2"),
+									stringTempoAttr("span.sigil.generation.id", "gen-2"),
+									stringTempoAttr("span.gen_ai.agent.name", "assistant"),
+									stringTempoAttr("resource.k8s.namespace.name", "dev"),
+									stringTempoAttr("resource.k8s.cluster.name", "cluster-b"),
+									stringTempoAttr("resource.service.name", "sigil-worker"),
+								},
+							},
+						},
+					}},
+				},
+			},
+		}},
+	}
+	walReader := &stubWALReader{
+		byID: map[string]*sigilv1.Generation{
+			"gen-1": firstGeneration,
+			"gen-2": secondGeneration,
+		},
+	}
+	svc, err := NewServiceWithDependencies(ServiceDependencies{
+		WALReader: walReader,
+	})
+	if err != nil {
+		t.Fatalf("new service: %v", err)
+	}
+	svc.SetTempoClient(tempoClient)
+
+	response, err := svc.GetAgentRuntimeContextForTenant(context.Background(), "tenant-a", AgentRuntimeContextRequest{
+		AgentName:        "assistant",
+		EffectiveVersion: firstDescriptor.EffectiveVersion,
+		TimeRange:        ConversationSearchTimeRange{From: base.Add(-24 * time.Hour), To: base},
+	})
+	if err != nil {
+		t.Fatalf("agent runtime context: %v", err)
+	}
+	if response.MatchingGenerationCount != 1 {
+		t.Fatalf("expected one matching generation, got %d", response.MatchingGenerationCount)
+	}
+	if len(response.Groups) == 0 {
+		t.Fatalf("expected runtime context groups")
+	}
+	namespaceGroup := response.Groups[0]
+	if namespaceGroup.Key != "resource.k8s.namespace.name" {
+		t.Fatalf("unexpected first group key %q", namespaceGroup.Key)
+	}
+	if len(namespaceGroup.Values) != 1 || namespaceGroup.Values[0].Value != "prod" || namespaceGroup.Values[0].Count != 1 {
+		t.Fatalf("unexpected namespace group %#v", namespaceGroup.Values)
 	}
 }
 
@@ -248,4 +468,12 @@ func (s *stubAgentCatalogStore) ListAgentVersions(_ context.Context, _, _ string
 func stringPtr(value string) *string {
 	v := value
 	return &v
+}
+
+func stringTempoAttr(key, value string) TempoAttribute {
+	return TempoAttribute{Key: key, Value: tempoStringValue(value)}
+}
+
+func strconvFormatInt(value int64) string {
+	return strconv.FormatInt(value, 10)
 }

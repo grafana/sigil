@@ -128,8 +128,10 @@ func RegisterQueryRoutes(
 
 	mux.Handle("/api/v1/generations/", protectedMiddleware(http.HandlerFunc(getGeneration(querySvc))))
 	mux.Handle("/api/v1/agents", protectedMiddleware(http.HandlerFunc(listAgents(querySvc))))
+	mux.Handle("/api/v1/agents/search", protectedMiddleware(http.HandlerFunc(searchAgents(querySvc))))
 	mux.Handle("/api/v1/agents:lookup", protectedMiddleware(http.HandlerFunc(lookupAgent(querySvc))))
 	mux.Handle("/api/v1/agents:versions", protectedMiddleware(http.HandlerFunc(listAgentVersions(querySvc))))
+	mux.Handle("/api/v1/agents:runtime-context", protectedMiddleware(http.HandlerFunc(agentRuntimeContext(querySvc))))
 	if ratingStore != nil {
 		mux.Handle("/api/v1/agents:rating", protectedMiddleware(http.HandlerFunc(lookupAgentRating(querySvc, ratingStore))))
 	}
@@ -587,6 +589,48 @@ func listAgents(querySvc *query.Service) http.HandlerFunc {
 	}
 }
 
+func searchAgents(querySvc *query.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		var payload query.AgentSearchRequest
+		if req.Body != nil {
+			decoder := json.NewDecoder(req.Body)
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+		}
+
+		items, nextCursor, err := querySvc.SearchAgentsForTenant(req.Context(), tenantID, payload)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if items == nil {
+			items = []query.AgentListItem{}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"items":       items,
+			"next_cursor": nextCursor,
+		})
+	}
+}
+
 func lookupAgent(querySvc *query.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {
@@ -630,6 +674,42 @@ func lookupAgent(querySvc *query.Service) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, item)
+	}
+}
+
+func agentRuntimeContext(querySvc *query.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		tenantID, err := tenant.TenantID(req.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		var payload query.AgentRuntimeContextRequest
+		if req.Body != nil {
+			decoder := json.NewDecoder(req.Body)
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+		}
+
+		response, err := querySvc.GetAgentRuntimeContextForTenant(req.Context(), tenantID, payload)
+		if err != nil {
+			if query.IsValidationError(err) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusOK, response)
 	}
 }
 

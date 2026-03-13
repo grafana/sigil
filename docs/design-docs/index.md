@@ -37,6 +37,7 @@ This folder stores durable engineering decisions for Sigil.
 - [`2026-03-03-eval-quick-test-design.md`](2026-03-03-eval-quick-test-design.md)
 - [`2026-03-03-backend-operational-metrics-baseline.md`](2026-03-03-backend-operational-metrics-baseline.md) (active)
 - [`2026-03-04-agent-catalog-versioning.md`](2026-03-04-agent-catalog-versioning.md) (active)
+- [`2026-03-11-agent-runtime-attribute-filters.md`](2026-03-11-agent-runtime-attribute-filters.md) (active)
 - [`2026-03-04-eval-saved-conversations.md`](2026-03-04-eval-saved-conversations.md) (completed)
 - [`2026-03-05-tokenizer-visualization-design.md`](2026-03-05-tokenizer-visualization-design.md)
 - [`2026-03-09-eval-resource-user-attribution.md`](2026-03-09-eval-resource-user-attribution.md) (completed)

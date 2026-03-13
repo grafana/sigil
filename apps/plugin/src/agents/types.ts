@@ -22,6 +22,50 @@ export type AgentListResponse = {
   next_cursor: string;
 };
 
+export type AgentAttributeFilter = {
+  key: string;
+  operator: '=' | '!=' | '=~';
+  value: string;
+};
+
+export type AgentSearchRequest = {
+  filters: string;
+  time_range: {
+    from: string;
+    to: string;
+  };
+  page_size: number;
+  cursor?: string;
+  name_prefix?: string;
+};
+
+export type AgentRuntimeValueCount = {
+  value: string;
+  count: number;
+};
+
+export type AgentRuntimeContextGroup = {
+  key: string;
+  values: AgentRuntimeValueCount[];
+};
+
+export type AgentRuntimeContextRequest = {
+  agent_name: string;
+  effective_version?: string;
+  filters: string;
+  time_range: {
+    from: string;
+    to: string;
+  };
+};
+
+export type AgentRuntimeContextResponse = {
+  matching_generation_count: number;
+  first_seen_at?: string;
+  last_seen_at?: string;
+  groups: AgentRuntimeContextGroup[];
+};
+
 export type AgentTool = {
   name: string;
   description: string;

@@ -137,8 +137,10 @@ Design doc: `docs/design-docs/2026-02-15-conversation-query-path.md`
 - `GET /api/v2/conversations/{id}` -- full conversation detail with shared-ref payload tables for messages, tools, system prompts, and metadata.
 - `GET /api/v1/generations/{id}` -- single generation detail (MySQL/object storage).
 - `GET /api/v1/agents` -- paginated agent catalog summaries grouped by agent name.
+- `POST /api/v1/agents/search` -- Tempo-backed filtered agent list using runtime `resource.*` / `span.*` attributes.
 - `GET /api/v1/agents:lookup` -- full agent definition for a name bucket and effective version (or latest).
 - `GET /api/v1/agents:versions` -- paginated effective-version history for one name bucket (named or anonymous).
+- `POST /api/v1/agents:runtime-context` -- runtime context summary for one agent/version in a selected time range.
 - `GET /api/v1/model-cards` -- model-card list and provider+model resolve mode for dashboard pricing joins.
 - `GET /api/v1/model-cards:lookup` -- model-card lookup by identity.
 - `GET /api/v1/model-cards:sources` -- model-card source freshness/status metadata.
@@ -437,8 +439,10 @@ Conversation query path (design doc: `docs/design-docs/2026-02-15-conversation-q
   - `GET /api/v1/conversations/{conversation_id}` -- full conversation with hydrated generations
   - `GET /api/v1/generations/{generation_id}` -- single generation detail
   - `GET /api/v1/agents` -- tenant agent heads grouped by name
+  - `POST /api/v1/agents/search` -- filtered agent heads constrained by runtime span/resource attributes
   - `GET /api/v1/agents:lookup` -- one agent bucket detail for selected/latest effective version
   - `GET /api/v1/agents:versions` -- paginated version history for one agent bucket
+  - `POST /api/v1/agents:runtime-context` -- per-agent runtime attribute summary joined with stored generations for effective-version filtering
 - Feedback endpoints (unchanged):
   - `GET /api/v1/conversations/{conversation_id}/ratings`
   - `POST /api/v1/conversations/{conversation_id}/ratings`
@@ -451,8 +455,10 @@ Conversation query path (design doc: `docs/design-docs/2026-02-15-conversation-q
   - `GET /api/plugins/grafana-sigil-app/resources/query/search/tags`
   - `GET /api/plugins/grafana-sigil-app/resources/query/search/tag/{tag}/values`
   - `GET /api/plugins/grafana-sigil-app/resources/query/agents`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/agents/search`
   - `GET /api/plugins/grafana-sigil-app/resources/query/agents/lookup`
   - `GET /api/plugins/grafana-sigil-app/resources/query/agents/versions`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/agents/runtime-context`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
   - `POST /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/annotations`

@@ -145,4 +145,74 @@ describe('defaultAgentsDataSource', () => {
     });
     expect(result.status).toBe('pending');
   });
+
+  it('searchAgents posts filter request', async () => {
+    fetchMock.mockReturnValue(
+      of({
+        data: {
+          items: [],
+          next_cursor: 'next-filtered',
+        },
+      })
+    );
+
+    await defaultAgentsDataSource.searchAgents?.({
+      filters: 'resource.k8s.namespace.name = "prod"',
+      time_range: {
+        from: '2026-03-03T12:00:00Z',
+        to: '2026-03-04T12:00:00Z',
+      },
+      page_size: 10,
+      name_prefix: 'assist',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith({
+      method: 'POST',
+      url: '/api/plugins/grafana-sigil-app/resources/query/agents/search',
+      data: {
+        filters: 'resource.k8s.namespace.name = "prod"',
+        time_range: {
+          from: '2026-03-03T12:00:00Z',
+          to: '2026-03-04T12:00:00Z',
+        },
+        page_size: 10,
+        name_prefix: 'assist',
+      },
+    });
+  });
+
+  it('getAgentRuntimeContext posts runtime context request', async () => {
+    fetchMock.mockReturnValue(
+      of({
+        data: {
+          matching_generation_count: 1,
+          groups: [],
+        },
+      })
+    );
+
+    await defaultAgentsDataSource.getAgentRuntimeContext?.({
+      agent_name: 'assistant',
+      effective_version: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      filters: 'resource.k8s.namespace.name = "prod"',
+      time_range: {
+        from: '2026-03-03T12:00:00Z',
+        to: '2026-03-04T12:00:00Z',
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith({
+      method: 'POST',
+      url: '/api/plugins/grafana-sigil-app/resources/query/agents/runtime-context',
+      data: {
+        agent_name: 'assistant',
+        effective_version: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        filters: 'resource.k8s.namespace.name = "prod"',
+        time_range: {
+          from: '2026-03-03T12:00:00Z',
+          to: '2026-03-04T12:00:00Z',
+        },
+      },
+    });
+  });
 });

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { css, cx } from '@emotion/css';
-import { dateTime, type GrafanaTheme2 } from '@grafana/data';
+import { dateTime, type GrafanaTheme2, type SelectableValue } from '@grafana/data';
 import DataTable, { type ColumnDef } from '../components/shared/DataTable';
 import AgentChipList from '../components/shared/AgentChipList';
 import {
@@ -42,6 +42,13 @@ import { PageInsightBar } from '../components/insight/PageInsightBar';
 import { useFilterUrlState } from '../hooks/useFilterUrlState';
 import { DashboardSummaryBar } from '../components/dashboard/DashboardSummaryBar';
 import { TopStat } from '../components/TopStat';
+import { AgentAttributeFilterBar } from '../components/filters/AgentAttributeFilterBar';
+import {
+  buildAgentAttributeFilterExpression,
+  parseAgentAttributeFilters,
+  rankAgentSearchTags,
+  writeAgentAttributeFilters,
+} from '../agents/attributeFilters';
 
 const PAGE_SIZE = 24;
 const STALE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -150,9 +157,18 @@ const getStyles = (theme: GrafanaTheme2) => ({
     gap: theme.spacing(1),
     alignItems: 'center',
   }),
+  filterRow: css({
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: theme.spacing(0.75),
+  }),
   searchInput: css({
     flex: 1,
     maxWidth: 400,
+  }),
+  filterSummary: css({
+    color: theme.colors.text.secondary,
+    fontSize: theme.typography.bodySmall.fontSize,
   }),
   agentsTableWrap: css({
     overflowX: 'auto',
@@ -277,10 +293,6 @@ function cardLabel(item: AgentListItem): string {
 
 function agentDisplayName(item: AgentListItem): string {
   return item.agent_name.trim().length > 0 ? item.agent_name : 'Unnamed agent bucket';
-}
-
-function agentHref(displayName: string): string {
-  return buildAgentDetailHref(displayName === 'Unnamed agent bucket' ? '' : displayName);
 }
 
 function aggregateAgentUsageByName(
@@ -499,15 +511,19 @@ export default function AgentsPage({
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [tagOptions, setTagOptions] = useState<Array<SelectableValue<string>>>([]);
+  const [tagsLoading, setTagsLoading] = useState(false);
   const searchInput = searchParams.get('search') ?? '';
   const [namePrefix, setNamePrefix] = useState('');
   const activeTab: AgentsPageTab = searchParams.get('tab') === 'table' ? 'table' : 'info';
   const requestVersion = useRef(0);
   const inFlightLoadMore = useRef(false);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const attributeFilters = useMemo(() => parseAgentAttributeFilters(searchParams), [searchParams]);
 
   const rangeFromSec = Math.floor(timeRange.from.valueOf() / 1000);
   const rangeToSec = Math.floor(timeRange.to.valueOf() / 1000);
+  const filterExpression = useMemo(() => buildAgentAttributeFilterExpression(attributeFilters), [attributeFilters]);
   const telemetryRangeDuration = useMemo(
     () => computeRangeDuration(rangeFromSec, rangeToSec),
     [rangeFromSec, rangeToSec]
@@ -530,6 +546,38 @@ export default function AgentsPage({
   }, [searchInput]);
 
   useEffect(() => {
+    if (!dataSource.getSearchTags) {
+      setTagOptions([]);
+      setTagsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setTagsLoading(true);
+    void dataSource
+      .getSearchTags(timeRange.from.toISOString(), timeRange.to.toISOString())
+      .then((tags) => {
+        if (!cancelled) {
+          setTagOptions(rankAgentSearchTags(tags));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTagOptions([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setTagsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dataSource, timeRange.from, timeRange.to]);
+
+  useEffect(() => {
     requestVersion.current += 1;
     const version = requestVersion.current;
 
@@ -543,8 +591,20 @@ export default function AgentsPage({
       setErrorMessage('');
     });
 
-    dataSource
-      .listAgents(PAGE_SIZE, '', namePrefix, rangeFromSec, rangeToSec)
+    const request =
+      filterExpression.length > 0 && dataSource.searchAgents
+        ? dataSource.searchAgents({
+            filters: filterExpression,
+            time_range: {
+              from: timeRange.from.toISOString(),
+              to: timeRange.to.toISOString(),
+            },
+            page_size: PAGE_SIZE,
+            name_prefix: namePrefix,
+          })
+        : dataSource.listAgents(PAGE_SIZE, '', namePrefix, rangeFromSec, rangeToSec);
+
+    request
       .then((response) => {
         if (requestVersion.current !== version) {
           return;
@@ -566,7 +626,7 @@ export default function AgentsPage({
         }
         setLoading(false);
       });
-  }, [dataSource, namePrefix, rangeFromSec, rangeToSec]);
+  }, [dataSource, filterExpression, namePrefix, rangeFromSec, rangeToSec, timeRange.from, timeRange.to]);
 
   // --- Summary computation ---
 
@@ -803,8 +863,38 @@ export default function AgentsPage({
       item.agent_name.trim().length > 0
         ? buildAgentDetailByNameRoute(item.agent_name)
         : buildAnonymousAgentDetailRoute();
-    void navigate(`${PLUGIN_BASE}/${route}`);
+    const nextParams = new URLSearchParams();
+    const rawFrom = typeof timeRange.raw.from === 'string' ? timeRange.raw.from : timeRange.from.toISOString();
+    const rawTo = typeof timeRange.raw.to === 'string' ? timeRange.raw.to : timeRange.to.toISOString();
+    nextParams.set('from', rawFrom);
+    nextParams.set('to', rawTo);
+    for (const filter of attributeFilters) {
+      if (filter.key && filter.value) {
+        nextParams.append('attr', `${filter.key}|${filter.operator}|${filter.value}`);
+      }
+    }
+    const query = nextParams.toString();
+    void navigate(query.length > 0 ? `${PLUGIN_BASE}/${route}?${query}` : `${PLUGIN_BASE}/${route}`);
   };
+
+  const buildAgentHrefForItem = useCallback(
+    (displayName: string) => {
+      const baseHref = buildAgentDetailHref(displayName === 'Unnamed agent bucket' ? '' : displayName);
+      const nextParams = new URLSearchParams();
+      const rawFrom = typeof timeRange.raw.from === 'string' ? timeRange.raw.from : timeRange.from.toISOString();
+      const rawTo = typeof timeRange.raw.to === 'string' ? timeRange.raw.to : timeRange.to.toISOString();
+      nextParams.set('from', rawFrom);
+      nextParams.set('to', rawTo);
+      for (const filter of attributeFilters) {
+        if (filter.key && filter.value) {
+          nextParams.append('attr', `${filter.key}|${filter.operator}|${filter.value}`);
+        }
+      }
+      const query = nextParams.toString();
+      return query.length > 0 ? `${baseHref}?${query}` : baseHref;
+    },
+    [attributeFilters, timeRange.from, timeRange.raw.from, timeRange.raw.to, timeRange.to]
+  );
 
   const setSearchInput = useCallback(
     (value: string) => {
@@ -822,6 +912,23 @@ export default function AgentsPage({
       );
     },
     [setUrlParams]
+  );
+
+  const setAttributeFilters = useCallback(
+    (filters: typeof attributeFilters) => {
+      setUrlParams((prev) => writeAgentAttributeFilters(prev, filters), { replace: true });
+    },
+    [setUrlParams]
+  );
+
+  const loadTagValues = useCallback(
+    async (tag: string) => {
+      if (!dataSource.getSearchTagValues) {
+        return [];
+      }
+      return dataSource.getSearchTagValues(tag, timeRange.from.toISOString(), timeRange.to.toISOString());
+    },
+    [dataSource, timeRange.from, timeRange.to]
   );
 
   const handleTabChange = useCallback(
@@ -850,7 +957,19 @@ export default function AgentsPage({
     const version = requestVersion.current;
     setLoadingMore(true);
     try {
-      const response = await dataSource.listAgents(PAGE_SIZE, nextCursor, namePrefix, rangeFromSec, rangeToSec);
+      const response =
+        filterExpression.length > 0 && dataSource.searchAgents
+          ? await dataSource.searchAgents({
+              filters: filterExpression,
+              time_range: {
+                from: timeRange.from.toISOString(),
+                to: timeRange.to.toISOString(),
+              },
+              page_size: PAGE_SIZE,
+              cursor: nextCursor,
+              name_prefix: namePrefix,
+            })
+          : await dataSource.listAgents(PAGE_SIZE, nextCursor, namePrefix, rangeFromSec, rangeToSec);
       if (requestVersion.current !== version) {
         return;
       }
@@ -865,7 +984,7 @@ export default function AgentsPage({
       inFlightLoadMore.current = false;
       setLoadingMore(false);
     }
-  }, [dataSource, loadingMore, namePrefix, nextCursor, rangeFromSec, rangeToSec]);
+  }, [dataSource, filterExpression, loadingMore, namePrefix, nextCursor, rangeFromSec, rangeToSec, timeRange.from, timeRange.to]);
 
   useEffect(() => {
     if (
@@ -945,6 +1064,21 @@ export default function AgentsPage({
             />
           </div>
 
+          <div className={styles.filterRow}>
+            <AgentAttributeFilterBar
+              filters={attributeFilters}
+              tagOptions={tagOptions}
+              tagsLoading={tagsLoading}
+              loadTagValues={loadTagValues}
+              onChange={setAttributeFilters}
+            />
+            {attributeFilters.length > 0 && (
+              <div className={styles.filterSummary}>
+                Filtering by {attributeFilters.length} runtime attribute{attributeFilters.length === 1 ? '' : 's'}.
+              </div>
+            )}
+          </div>
+
           {activeTab === 'info' ? (
             items.length === 0 ? (
               <div className={styles.empty}>
@@ -1008,7 +1142,7 @@ export default function AgentsPage({
                       loading={false}
                       breakdownLabel="agent_name"
                       height={CHART_HEIGHT}
-                      getItemHref={agentHref}
+                      getItemHref={buildAgentHrefForItem}
                     />
                     <AgentFootprintPanel
                       title="Agent Footprint"
@@ -1017,7 +1151,7 @@ export default function AgentsPage({
                       totalCostUSD={summary.totalCostUSD}
                       loading={usageByModelAndType.loading || resolvedPricing.loading}
                       height={CHART_HEIGHT}
-                      getItemHref={agentHref}
+                      getItemHref={buildAgentHrefForItem}
                     />
                   </div>
                 </div>
@@ -1055,7 +1189,7 @@ export default function AgentsPage({
                       keyOf={(item) => `${item.agent_name}:${item.latest_effective_version}`}
                       onRowClick={(item, e) => {
                         const name = agentDisplayName(item);
-                        const href = agentHref(name);
+                        const href = buildAgentHrefForItem(name);
                         if (e.metaKey || e.ctrlKey) {
                           window.open(href, '_blank');
                         } else {

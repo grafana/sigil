@@ -32,8 +32,10 @@ Current plugin query contract:
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}`
   - `GET /api/plugins/grafana-sigil-app/resources/query/generations/{generation_id}`
   - `GET /api/plugins/grafana-sigil-app/resources/query/agents`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/agents/search`
   - `GET /api/plugins/grafana-sigil-app/resources/query/agents/lookup`
   - `GET /api/plugins/grafana-sigil-app/resources/query/agents/versions`
+  - `POST /api/plugins/grafana-sigil-app/resources/query/agents/runtime-context`
   - `GET /api/plugins/grafana-sigil-app/resources/query/search/tags`
   - `GET /api/plugins/grafana-sigil-app/resources/query/search/tag/{tag}/values`
   - `GET /api/plugins/grafana-sigil-app/resources/query/conversations/{conversation_id}/ratings`
@@ -67,8 +69,10 @@ Current plugin query contract:
   - `GET /api/v1/conversations/{conversation_id}`
   - `GET /api/v1/generations/{generation_id}`
   - `GET /api/v1/agents`
+  - `POST /api/v1/agents/search`
   - `GET /api/v1/agents:lookup`
   - `GET /api/v1/agents:versions`
+  - `POST /api/v1/agents:runtime-context`
   - `GET /api/v1/conversations/{conversation_id}/ratings`
   - `POST /api/v1/conversations/{conversation_id}/ratings`
   - `GET /api/v1/conversations/{conversation_id}/annotations`
@@ -136,8 +140,10 @@ Sigil plugin query routes enforce action-based RBAC in the plugin backend:
   - `GET /query/conversations/{conversation_id}/annotations`
   - `GET /query/generations/{generation_id}`
   - `GET /query/agents`
+  - `POST /query/agents/search`
   - `GET /query/agents/lookup`
   - `GET /query/agents/versions`
+  - `POST /query/agents/runtime-context`
   - `GET /query/search/tags`
   - `GET /query/search/tag/{tag}/values`
   - `GET /query/model-cards`
@@ -210,9 +216,11 @@ See `docs/references/grafana-query-response-shapes.md`.
   - display actor attribution returned by the backend for eval resources; do not let users edit actor fields client-side
 - Agents:
   - list tenant agent heads with prefix search and cursor pagination
+  - support multi-clause runtime attribute filters over discovered `resource.*` and `span.*` keys
   - surface unnamed-agent bucket explicitly with warning treatment
   - open detail view for named and anonymous buckets
   - support effective-version selection via query param deep-linking and version history lookup
+  - show per-version runtime context summaries from Tempo without splitting catalog identity
 - Traces:
   - use Tempo proxy links for trace drilldown from generation/conversation views
 - Settings: connection and runtime preferences, including query/tenant validation visibility.

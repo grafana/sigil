@@ -549,6 +549,12 @@ func TestCallResource(t *testing.T) {
 				return
 			}
 			_, _ = io.WriteString(w, `{"items":[{"agent_name":"assistant"}],"next_cursor":""}`)
+		case "/api/v1/agents/search":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			_, _ = io.WriteString(w, `{"items":[{"agent_name":"assistant"}],"next_cursor":""}`)
 		case "/api/v1/agents:lookup":
 			if r.Method != http.MethodGet {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -561,6 +567,12 @@ func TestCallResource(t *testing.T) {
 				return
 			}
 			_, _ = io.WriteString(w, `{"items":[{"effective_version":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"next_cursor":""}`)
+		case "/api/v1/agents:runtime-context":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			_, _ = io.WriteString(w, `{"matching_generation_count":1,"groups":[]}`)
 		case "/api/v1/agents:rating":
 			if r.Method != http.MethodGet {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

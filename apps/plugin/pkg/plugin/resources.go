@@ -123,9 +123,13 @@ func requiredPermissionAction(method string, path string) (string, bool) {
 		return permissionDataRead, true
 	case method == http.MethodGet && path == "/query/agents":
 		return permissionDataRead, true
+	case method == http.MethodPost && path == "/query/agents/search":
+		return permissionDataRead, true
 	case method == http.MethodGet && path == "/query/agents/lookup":
 		return permissionDataRead, true
 	case method == http.MethodGet && path == "/query/agents/versions":
+		return permissionDataRead, true
+	case method == http.MethodPost && path == "/query/agents/runtime-context":
 		return permissionDataRead, true
 	case method == http.MethodGet && path == "/query/agents/rating":
 		return permissionDataRead, true
@@ -680,12 +684,20 @@ func (a *App) handleListAgents(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, "/api/v1/agents", http.MethodGet)
 }
 
+func (a *App) handleSearchAgents(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/agents/search", http.MethodPost)
+}
+
 func (a *App) handleLookupAgent(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, "/api/v1/agents:lookup", http.MethodGet)
 }
 
 func (a *App) handleListAgentVersions(w http.ResponseWriter, req *http.Request) {
 	a.handleProxy(w, req, "/api/v1/agents:versions", http.MethodGet)
+}
+
+func (a *App) handleAgentRuntimeContext(w http.ResponseWriter, req *http.Request) {
+	a.handleProxy(w, req, "/api/v1/agents:runtime-context", http.MethodPost)
 }
 
 func (a *App) handleLookupAgentRating(w http.ResponseWriter, req *http.Request) {
@@ -1185,8 +1197,10 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/query/model-cards", a.withAuthorization(a.handleListModelCards))
 	mux.HandleFunc("/query/model-cards/lookup", a.withAuthorization(a.handleLookupModelCard))
 	mux.HandleFunc("/query/agents", a.withAuthorization(a.handleListAgents))
+	mux.HandleFunc("/query/agents/search", a.withAuthorization(a.handleSearchAgents))
 	mux.HandleFunc("/query/agents/lookup", a.withAuthorization(a.handleLookupAgent))
 	mux.HandleFunc("/query/agents/versions", a.withAuthorization(a.handleListAgentVersions))
+	mux.HandleFunc("/query/agents/runtime-context", a.withAuthorization(a.handleAgentRuntimeContext))
 	mux.HandleFunc("/query/agents/rating", a.withAuthorization(a.handleLookupAgentRating))
 	mux.HandleFunc("/query/agents/rate", a.withAuthorization(a.handleRateAgent))
 	mux.HandleFunc("/query/agents/prompt-insights", a.withAuthorization(a.handleLookupPromptInsights))

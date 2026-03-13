@@ -14,6 +14,7 @@ import (
 	"time"
 
 	kitlog "github.com/go-kit/log"
+	"github.com/grafana/sigil/sigil/internal/agentmeta"
 	"github.com/grafana/sigil/sigil/internal/agentrating"
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 	"github.com/grafana/sigil/sigil/internal/eval/evaluators/judges"
@@ -432,6 +433,182 @@ func TestListAgentsEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(resp.Body.String(), `"next_cursor":"`) {
 		t.Fatalf("expected next cursor in response, body=%s", resp.Body.String())
+	}
+}
+
+func TestSearchAgentsEndpoint(t *testing.T) {
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		AgentCatalogStore: &testAgentCatalogStore{
+			heads: []storage.AgentHead{
+				{
+					ID:                     1,
+					AgentName:              "assistant",
+					LatestEffectiveVersion: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					LatestSeenAt:           time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC),
+					FirstSeenAt:            time.Date(2026, 3, 4, 10, 0, 0, 0, time.UTC),
+					GenerationCount:        3,
+					VersionCount:           2,
+				},
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+	querySvc.SetTempoClient(&testTempoClient{
+		searchResponses: []*query.TempoSearchResponse{{
+			Traces: []query.TempoTrace{
+				{
+					TraceID:           "trace-1",
+					StartTimeUnixNano: fmt.Sprintf("%d", time.Date(2026, 3, 4, 10, 30, 0, 0, time.UTC).UnixNano()),
+					SpanSets: []query.TempoSpanSet{{
+						Spans: []query.TempoSpan{
+							{
+								SpanID:            "span-1",
+								StartTimeUnixNano: fmt.Sprintf("%d", time.Date(2026, 3, 4, 10, 30, 0, 0, time.UTC).UnixNano()),
+								DurationNanos:     fmt.Sprintf("%d", time.Second.Nanoseconds()),
+								Attributes: []query.TempoAttribute{
+									{Key: "span.gen_ai.conversation.id", Value: mustTempoStringValue(t, "conv-1")},
+									{Key: "span.sigil.generation.id", Value: mustTempoStringValue(t, "gen-1")},
+									{Key: "span.gen_ai.agent.name", Value: mustTempoStringValue(t, "assistant")},
+									{Key: "resource.k8s.namespace.name", Value: mustTempoStringValue(t, "prod")},
+								},
+							},
+						},
+					}},
+				},
+			},
+		}},
+	})
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterRoutes(
+		mux,
+		querySvc,
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/search", bytes.NewBufferString(`{
+		"filters":"resource.k8s.namespace.name = \"prod\"",
+		"time_range":{"from":"2026-03-03T12:00:00Z","to":"2026-03-04T12:00:00Z"},
+		"page_size":10
+	}`))
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"agent_name":"assistant"`) {
+		t.Fatalf("expected matching agent payload, body=%s", resp.Body.String())
+	}
+}
+
+func TestAgentRuntimeContextEndpoint(t *testing.T) {
+	firstGeneration := &sigilv1.Generation{Id: "gen-1", AgentName: "assistant", SystemPrompt: "Prompt A"}
+	secondGeneration := &sigilv1.Generation{Id: "gen-2", AgentName: "assistant", SystemPrompt: "Prompt B"}
+	firstDescriptor, err := agentmeta.BuildDescriptor(firstGeneration)
+	if err != nil {
+		t.Fatalf("build descriptor: %v", err)
+	}
+
+	querySvc, err := query.NewServiceWithDependencies(query.ServiceDependencies{
+		WALReader: &testWALReader{
+			byID: map[string]*sigilv1.Generation{
+				"gen-1": firstGeneration,
+				"gen-2": secondGeneration,
+			},
+		},
+		FeedbackStore: feedback.NewMemoryStore(),
+	})
+	if err != nil {
+		t.Fatalf("new query service: %v", err)
+	}
+	querySvc.SetTempoClient(&testTempoClient{
+		searchResponses: []*query.TempoSearchResponse{{
+			Traces: []query.TempoTrace{
+				{
+					TraceID:           "trace-1",
+					StartTimeUnixNano: fmt.Sprintf("%d", time.Date(2026, 3, 4, 10, 30, 0, 0, time.UTC).UnixNano()),
+					SpanSets: []query.TempoSpanSet{{
+						Spans: []query.TempoSpan{
+							{
+								SpanID:            "span-1",
+								StartTimeUnixNano: fmt.Sprintf("%d", time.Date(2026, 3, 4, 10, 30, 0, 0, time.UTC).UnixNano()),
+								DurationNanos:     fmt.Sprintf("%d", time.Second.Nanoseconds()),
+								Attributes: []query.TempoAttribute{
+									{Key: "span.gen_ai.conversation.id", Value: mustTempoStringValue(t, "conv-1")},
+									{Key: "span.sigil.generation.id", Value: mustTempoStringValue(t, "gen-1")},
+									{Key: "span.gen_ai.agent.name", Value: mustTempoStringValue(t, "assistant")},
+									{Key: "resource.k8s.namespace.name", Value: mustTempoStringValue(t, "prod")},
+									{Key: "resource.k8s.cluster.name", Value: mustTempoStringValue(t, "cluster-a")},
+									{Key: "resource.service.name", Value: mustTempoStringValue(t, "sigil-api")},
+								},
+							},
+						},
+					}},
+				},
+				{
+					TraceID:           "trace-2",
+					StartTimeUnixNano: fmt.Sprintf("%d", time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC).UnixNano()),
+					SpanSets: []query.TempoSpanSet{{
+						Spans: []query.TempoSpan{
+							{
+								SpanID:            "span-2",
+								StartTimeUnixNano: fmt.Sprintf("%d", time.Date(2026, 3, 4, 11, 0, 0, 0, time.UTC).UnixNano()),
+								DurationNanos:     fmt.Sprintf("%d", time.Second.Nanoseconds()),
+								Attributes: []query.TempoAttribute{
+									{Key: "span.gen_ai.conversation.id", Value: mustTempoStringValue(t, "conv-2")},
+									{Key: "span.sigil.generation.id", Value: mustTempoStringValue(t, "gen-2")},
+									{Key: "span.gen_ai.agent.name", Value: mustTempoStringValue(t, "assistant")},
+									{Key: "resource.k8s.namespace.name", Value: mustTempoStringValue(t, "dev")},
+									{Key: "resource.k8s.cluster.name", Value: mustTempoStringValue(t, "cluster-b")},
+									{Key: "resource.service.name", Value: mustTempoStringValue(t, "sigil-worker")},
+								},
+							},
+						},
+					}},
+				},
+			},
+		}},
+	})
+
+	mux := http.NewServeMux()
+	protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+	RegisterRoutes(
+		mux,
+		querySvc,
+		generationingest.NewService(generationingest.NewMemoryStore()),
+		feedback.NewService(feedback.NewMemoryStore()),
+		true,
+		true,
+		newTestModelCardService(t),
+		protected,
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents:runtime-context", bytes.NewBufferString(fmt.Sprintf(`{
+		"agent_name":"assistant",
+		"effective_version":"%s",
+		"time_range":{"from":"2026-03-03T12:00:00Z","to":"2026-03-04T12:00:00Z"}
+	}`, firstDescriptor.EffectiveVersion)))
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"matching_generation_count":1`) {
+		t.Fatalf("expected filtered generation count, body=%s", resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"key":"resource.k8s.namespace.name"`) || !strings.Contains(resp.Body.String(), `"value":"prod"`) {
+		t.Fatalf("expected namespace aggregation, body=%s", resp.Body.String())
 	}
 }
 
@@ -1524,6 +1701,32 @@ type testAgentCatalogStore struct {
 	nextVersionCursor *storage.AgentVersionCursor
 }
 
+type testTempoClient struct {
+	searchResponses []*query.TempoSearchResponse
+	searchCalls     int
+}
+
+func (c *testTempoClient) Search(_ context.Context, request query.TempoSearchRequest) (*query.TempoSearchResponse, error) {
+	if len(c.searchResponses) == 0 {
+		return &query.TempoSearchResponse{Traces: []query.TempoTrace{}}, nil
+	}
+	idx := c.searchCalls
+	if idx >= len(c.searchResponses) {
+		idx = len(c.searchResponses) - 1
+	}
+	c.searchCalls++
+	_ = request
+	return c.searchResponses[idx], nil
+}
+
+func (c *testTempoClient) SearchTags(_ context.Context, _ string, _ string, _, _ time.Time) ([]string, error) {
+	return []string{}, nil
+}
+
+func (c *testTempoClient) SearchTagValues(_ context.Context, _ string, _ string, _, _ time.Time) ([]string, error) {
+	return []string{}, nil
+}
+
 type testAgentRatingStore struct {
 	mu                   sync.Mutex
 	rating               *agentrating.Rating
@@ -1957,4 +2160,13 @@ func TestParseLookback(t *testing.T) {
 func stringPtr(value string) *string {
 	v := value
 	return &v
+}
+
+func mustTempoStringValue(t *testing.T, value string) query.TempoAttributeValue {
+	t.Helper()
+	var out query.TempoAttributeValue
+	if err := json.Unmarshal([]byte(fmt.Sprintf(`{"stringValue":%q}`, value)), &out); err != nil {
+		t.Fatalf("unmarshal tempo value: %v", err)
+	}
+	return out
 }
