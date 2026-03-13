@@ -61,8 +61,6 @@ async function handleEvent(
   // Dedup
   const sessionSet = recordedMessages.get(assistantMsg.sessionID) ?? new Set<string>();
   if (sessionSet.has(assistantMsg.id)) return;
-  sessionSet.add(assistantMsg.id);
-  recordedMessages.set(assistantMsg.sessionID, sessionSet);
 
   // Look up pending generation (user-side data)
   const pending = pendingGenerations.get(assistantMsg.sessionID);
@@ -80,25 +78,25 @@ async function handleEvent(
 
   const contentCapture = config.contentCapture ?? true;
 
-  const seed = {
-    conversationId: assistantMsg.sessionID,
-    agentName: buildAgentName(config.agentName, assistantMsg.mode),
-    agentVersion: config.agentVersion,
-    model: { provider: assistantMsg.providerID, name: assistantMsg.modelID },
-    startedAt: new Date(assistantMsg.time.created),
-    ...(contentCapture && {
-      systemPrompt: pending?.systemPrompt,
-      tools: mapToolDefinitions(pending?.tools),
-    }),
-  };
-
-  // When contentCapture is enabled, map full content with redaction;
-  // otherwise fall back to metadata-only result (no message content).
-  const result = contentCapture
-    ? mapGeneration(assistantMsg, pending?.userParts ?? [], assistantParts, redactor)
-    : mapGeneration(assistantMsg, [], [], redactor);
-
   try {
+    const seed = {
+      conversationId: assistantMsg.sessionID,
+      agentName: buildAgentName(config.agentName, assistantMsg.mode),
+      agentVersion: config.agentVersion,
+      model: { provider: assistantMsg.providerID, name: assistantMsg.modelID },
+      startedAt: new Date(assistantMsg.time.created),
+      ...(contentCapture && {
+        systemPrompt: pending?.systemPrompt,
+        tools: mapToolDefinitions(pending?.tools),
+      }),
+    };
+
+    // When contentCapture is enabled, map full content with redaction;
+    // otherwise fall back to metadata-only result (no message content).
+    const result = contentCapture
+      ? mapGeneration(assistantMsg, pending?.userParts ?? [], assistantParts, redactor)
+      : mapGeneration(assistantMsg, [], [], redactor);
+
     if (assistantMsg.error) {
       await sigil.startGeneration(seed, async (recorder) => {
         recorder.setResult(result);
@@ -109,6 +107,10 @@ async function handleEvent(
         recorder.setResult(result);
       });
     }
+
+    // Mark as recorded only after successful processing
+    sessionSet.add(assistantMsg.id);
+    recordedMessages.set(assistantMsg.sessionID, sessionSet);
   } catch {
     // Sigil recording failure should never break the plugin
   }

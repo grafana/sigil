@@ -47,5 +47,33 @@ export function parseSigilConfig(raw: unknown): SigilConfig | undefined {
     console.warn("[sigil] enabled but auth config is missing -- disabling");
     return undefined;
   }
+
+  const auth = obj.auth as Record<string, unknown>;
+  const mode = auth.mode;
+
+  if (mode === "bearer") {
+    if (typeof auth.bearerToken !== "string" || !auth.bearerToken) {
+      console.warn("[sigil] auth mode 'bearer' requires bearerToken -- disabling");
+      return undefined;
+    }
+  } else if (mode === "tenant") {
+    if (typeof auth.tenantId !== "string" || !auth.tenantId) {
+      console.warn("[sigil] auth mode 'tenant' requires tenantId -- disabling");
+      return undefined;
+    }
+  } else if (mode === "basic") {
+    if (typeof auth.tenantId !== "string" || !auth.tenantId) {
+      console.warn("[sigil] auth mode 'basic' requires tenantId -- disabling");
+      return undefined;
+    }
+    if (typeof auth.token !== "string" || !auth.token) {
+      console.warn("[sigil] auth mode 'basic' requires token -- disabling");
+      return undefined;
+    }
+  } else if (mode !== "none") {
+    console.warn(`[sigil] unknown auth mode '${mode}' -- disabling`);
+    return undefined;
+  }
+
   return raw as SigilConfig;
 }
