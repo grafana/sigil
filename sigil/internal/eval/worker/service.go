@@ -205,7 +205,7 @@ func (s *Service) releaseUnstartedItems(ctx context.Context, items []evalpkg.Wor
 
 func (s *Service) executeItem(ctx context.Context, item evalpkg.WorkItem) {
 	startedAt := time.Now()
-	kind := "unknown"
+	kind := workerUnknownLabel
 
 	evaluatorDefinition, err := s.store.GetEvaluatorVersion(ctx, item.TenantID, item.EvaluatorID, item.EvaluatorVersion)
 	if err != nil {
