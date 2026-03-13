@@ -14,6 +14,7 @@ function appendLabelFilters(filters: DashboardFilters, extraFilters: LabelFilter
 export function sanitizeToolAnalyticsFilters(filters: DashboardFilters): DashboardFilters {
   return {
     ...filters,
+    models: [],
     labelFilters: filters.labelFilters.filter((filter) => filter.key.trim() !== TOOL_METRIC_LABEL),
   };
 }

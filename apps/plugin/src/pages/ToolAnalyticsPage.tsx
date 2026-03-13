@@ -21,6 +21,7 @@ import {
   sanitizeToolAnalyticsFilters,
   TOOL_METRIC_LABEL,
 } from '../dashboard/toolRuntime';
+import { formatToolCount } from '../dashboard/toolRuntimeTable';
 import { buildConversationsUrl, buildToolsUrl } from '../dashboard/url';
 import { useFilterUrlState } from '../hooks/useFilterUrlState';
 import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
@@ -486,6 +487,7 @@ export default function ToolAnalyticsPage({
         dataSource={dataSource}
         from={from}
         to={to}
+        hideModelFilter
         onTimeRangeChange={setTimeRange}
         onFiltersChange={handleFiltersChange}
         fillWidth
@@ -512,7 +514,7 @@ export default function ToolAnalyticsPage({
         <TopStat
           label="Executions"
           value={executions.data ? vectorToStatValue(executions.data) : 0}
-          displayValue={formatCount(executions.data ? vectorToStatValue(executions.data) : 0)}
+          displayValue={formatToolCount(executions.data ? vectorToStatValue(executions.data) : 0)}
           loading={executions.loading}
           prevValue={prevExecutions.data ? vectorToStatValue(prevExecutions.data) : 0}
           prevLoading={prevExecutions.loading}
@@ -521,7 +523,7 @@ export default function ToolAnalyticsPage({
         <TopStat
           label="Errors"
           value={totalErrors.data ? vectorToStatValue(totalErrors.data) : 0}
-          displayValue={formatCount(totalErrors.data ? vectorToStatValue(totalErrors.data) : 0)}
+          displayValue={formatToolCount(totalErrors.data ? vectorToStatValue(totalErrors.data) : 0)}
           loading={totalErrors.loading}
           prevValue={prevTotalErrors.data ? vectorToStatValue(prevTotalErrors.data) : 0}
           prevLoading={prevTotalErrors.loading}
@@ -689,13 +691,6 @@ export default function ToolAnalyticsPage({
       />
     </div>
   );
-}
-
-function formatCount(value: number): string {
-  if (!Number.isFinite(value)) {
-    return '0';
-  }
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(value));
 }
 
 function getStyles(theme: GrafanaTheme2) {

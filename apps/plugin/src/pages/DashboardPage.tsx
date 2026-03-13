@@ -23,7 +23,6 @@ const LABEL_FILTER_ROW_STORAGE_KEY = 'sigil.dashboard.labelFilterRowOpen';
 const TOOL_BREAKDOWN_OPTIONS: Array<SelectableValue<BreakdownDimension>> = [
   { label: 'None', value: 'none' },
   { label: 'Provider', value: 'provider' },
-  { label: 'Model', value: 'model' },
   { label: 'Agent', value: 'agent' },
   { label: 'Tool', value: 'tool' },
 ];
@@ -87,6 +86,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         from={from}
         to={to}
         breakdownOptions={tab === 'tools' ? TOOL_BREAKDOWN_OPTIONS : undefined}
+        hideModelFilter={tab === 'tools'}
         showLabelFilters={tab !== 'evaluation'}
         showLabelFilterRow={showLabelFilterRow}
         onLabelFilterRowOpenChange={setShowLabelFilterRow}
