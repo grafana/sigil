@@ -367,6 +367,46 @@ func TestRunShardWorkersLogsTruncateFailureDetailsAndCountsClass(t *testing.T) {
 	}
 }
 
+func TestTruncateContextCancellationDoesNotCountAsFailure(t *testing.T) {
+	failureBefore := testutil.ToFloat64(compactorTruncateFailuresTotal.WithLabelValues(string(mysql.ErrorClassUnknown)))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	truncator := &cancellingTruncator{cancel: cancel}
+	service := &Service{
+		cfg: config.CompactorConfig{
+			BatchSize:          8,
+			LeaseTTL:           30 * time.Second,
+			ShardCount:         1,
+			ShardWindowSeconds: 60,
+		},
+		logger:    log.NewNopLogger(),
+		truncator: truncator,
+	}
+
+	_, _, err := service.truncateCompactedWithRetry(
+		ctx,
+		storage.TenantShard{TenantID: "tenant-a", ShardID: 0},
+		storage.ShardPredicate{ShardID: 0, ShardCount: 1},
+		time.Now().UTC().Add(-time.Hour),
+		time.Now().Add(time.Hour),
+	)
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got: %v", err)
+	}
+
+	var truncateErr *truncateFailureError
+	if errors.As(err, &truncateErr) {
+		t.Fatal("context cancellation should not be wrapped as truncateFailureError")
+	}
+
+	if got := testutil.ToFloat64(compactorTruncateFailuresTotal.WithLabelValues(string(mysql.ErrorClassUnknown))) - failureBefore; got != 0 {
+		t.Fatalf("truncate failure metric increment=%v, want 0 (context cancellation should not count)", got)
+	}
+}
+
 func assertGenerationExists(t *testing.T, store *mysql.WALStore, tenantID, generationID string, expected bool) {
 	t.Helper()
 
@@ -515,6 +555,15 @@ type noopTruncator struct{}
 
 func (noopTruncator) TruncateCompacted(_ context.Context, _ string, _ storage.ShardPredicate, _ time.Time, _ int) (int64, error) {
 	return 0, nil
+}
+
+type cancellingTruncator struct {
+	cancel context.CancelFunc
+}
+
+func (t *cancellingTruncator) TruncateCompacted(_ context.Context, _ string, _ storage.ShardPredicate, _ time.Time, _ int) (int64, error) {
+	t.cancel()
+	return 0, context.Canceled
 }
 
 type truncateResponse struct {
