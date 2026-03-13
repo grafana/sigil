@@ -443,11 +443,13 @@ function UsageChips({ generation }: { generation: GenerationDetail }) {
   const totalIn = input + cacheRead + cacheWrite;
   const reasoning = toNum(u.reasoning_tokens);
 
+  const hasCache = cacheRead > 0 || cacheWrite > 0;
   const newIn = input + cacheWrite;
-  const cacheParts = [
-    cacheRead > 0 ? `${formatNumber(cacheRead)} cached` : '',
-    newIn > 0 ? `${formatNumber(newIn)} new` : '',
-  ].filter(Boolean);
+  const cacheParts = hasCache
+    ? [cacheRead > 0 ? `${formatNumber(cacheRead)} cached` : '', newIn > 0 ? `${formatNumber(newIn)} new` : ''].filter(
+        Boolean
+      )
+    : [];
   const cacheDetail = cacheParts.length > 0 ? ` (${cacheParts.join(' + ')})` : '';
 
   return (
