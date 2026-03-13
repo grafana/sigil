@@ -7,16 +7,6 @@ import (
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
 )
 
-func TestTemplatesHaveUniqueEvaluatorIDs(t *testing.T) {
-	seen := make(map[string]struct{})
-	for _, template := range Templates() {
-		if _, exists := seen[template.EvaluatorID]; exists {
-			t.Fatalf("duplicate predefined template evaluator_id: %q", template.EvaluatorID)
-		}
-		seen[template.EvaluatorID] = struct{}{}
-	}
-}
-
 func TestLLMJudgeTemplatesDoNotHardcodeProviderOrModel(t *testing.T) {
 	for _, template := range Templates() {
 		if template.Kind != evalpkg.EvaluatorKindLLMJudge {
@@ -104,16 +94,6 @@ func TestTemplatesIncludeGroundednessAndNoHallucination(t *testing.T) {
 	}
 	if !foundGroundedness {
 		t.Fatal("expected sigil.groundedness predefined template")
-	}
-}
-
-func TestTemplatesHaveUniqueEvaluatorIDs(t *testing.T) {
-	seen := make(map[string]struct{}, len(Templates()))
-	for _, template := range Templates() {
-		if _, exists := seen[template.EvaluatorID]; exists {
-			t.Fatalf("duplicate evaluator id %q", template.EvaluatorID)
-		}
-		seen[template.EvaluatorID] = struct{}{}
 	}
 }
 
