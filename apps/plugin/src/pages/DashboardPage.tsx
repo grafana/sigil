@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { css } from '@emotion/css';
-import { type GrafanaTheme2 } from '@grafana/data';
+import { type GrafanaTheme2, type SelectableValue } from '@grafana/data';
 import { Tab, TabsBar, useStyles2 } from '@grafana/ui';
 import { type DashboardDataSource, defaultDashboardDataSource } from '../dashboard/api';
-import { type DashboardTab } from '../dashboard/types';
+import { type BreakdownDimension, type DashboardTab } from '../dashboard/types';
 import { useDashboardUrlState } from '../dashboard/useDashboardUrlState';
 import { DashboardFilterBar } from '../components/dashboard/DashboardFilterBar';
 import { DashboardGrid } from '../components/dashboard/DashboardGrid';
@@ -11,14 +11,22 @@ import { DashboardPerformanceGrid } from '../components/dashboard/DashboardPerfo
 import { DashboardErrorsGrid } from '../components/dashboard/DashboardErrorsGrid';
 import { DashboardUsageGrid } from '../components/dashboard/DashboardUsageGrid';
 import { DashboardEvalGrid } from '../components/dashboard/DashboardEvalGrid';
+import { DashboardToolsGrid } from '../components/dashboard/DashboardToolsGrid';
 import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
 import { LandingTopBar } from '../components/landing/LandingTopBar';
+import { normalizeToolAnalyticsBreakdown } from '../dashboard/toolRuntime';
 
 type DashboardPageProps = {
   dataSource?: DashboardDataSource;
 };
 
 const LABEL_FILTER_ROW_STORAGE_KEY = 'sigil.dashboard.labelFilterRowOpen';
+const TOOL_BREAKDOWN_OPTIONS: Array<SelectableValue<BreakdownDimension>> = [
+  { label: 'None', value: 'none' },
+  { label: 'Provider', value: 'provider' },
+  { label: 'Agent', value: 'agent' },
+  { label: 'Tool', value: 'tool' },
+];
 
 export default function DashboardPage({ dataSource = defaultDashboardDataSource }: DashboardPageProps) {
   const styles = useStyles2(getStyles);
@@ -49,6 +57,13 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
 
   const from = useMemo(() => Math.floor(timeRange.from.valueOf() / 1000), [timeRange]);
   const to = useMemo(() => Math.floor(timeRange.to.valueOf() / 1000), [timeRange]);
+  const effectiveBreakdownBy = useMemo(() => {
+    if (tab === 'tools') {
+      return normalizeToolAnalyticsBreakdown(breakdownBy);
+    }
+
+    return breakdownBy === 'tool' ? 'agent' : breakdownBy;
+  }, [breakdownBy, tab]);
 
   const { providerOptions, modelOptions, agentOptions, labelKeyOptions, labelsLoading } = useCascadingFilterOptions(
     dataSource,
@@ -69,7 +84,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
       <DashboardFilterBar
         timeRange={timeRange}
         filters={filters}
-        breakdownBy={breakdownBy}
+        breakdownBy={effectiveBreakdownBy}
         providerOptions={providerOptions}
         modelOptions={modelOptions}
         agentOptions={agentOptions}
@@ -78,6 +93,8 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         dataSource={dataSource}
         from={from}
         to={to}
+        breakdownOptions={tab === 'tools' ? TOOL_BREAKDOWN_OPTIONS : undefined}
+        hideModelFilter={tab === 'tools'}
         showLabelFilters={tab !== 'evaluation'}
         showLabelFilterRow={showLabelFilterRow}
         onLabelFilterRowOpenChange={setShowLabelFilterRow}
@@ -90,13 +107,14 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         <Tab label="Performance" active={tab === 'performance'} onChangeTab={handleTabChange('performance')} />
         <Tab label="Errors" active={tab === 'errors'} onChangeTab={handleTabChange('errors')} />
         <Tab label="Usage" active={tab === 'usage'} onChangeTab={handleTabChange('usage')} />
+        <Tab label="Tools" active={tab === 'tools'} onChangeTab={handleTabChange('tools')} />
         <Tab label="Evaluation" active={tab === 'evaluation'} onChangeTab={handleTabChange('evaluation')} />
       </TabsBar>
       {tab === 'overview' && (
         <DashboardGrid
           dataSource={dataSource}
           filters={filters}
-          breakdownBy={breakdownBy}
+          breakdownBy={effectiveBreakdownBy}
           from={from}
           to={to}
           timeRange={timeRange}
@@ -107,7 +125,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         <DashboardPerformanceGrid
           dataSource={dataSource}
           filters={filters}
-          breakdownBy={breakdownBy}
+          breakdownBy={effectiveBreakdownBy}
           from={from}
           to={to}
           timeRange={timeRange}
@@ -118,7 +136,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         <DashboardErrorsGrid
           dataSource={dataSource}
           filters={filters}
-          breakdownBy={breakdownBy}
+          breakdownBy={effectiveBreakdownBy}
           from={from}
           to={to}
           timeRange={timeRange}
@@ -129,7 +147,18 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         <DashboardUsageGrid
           dataSource={dataSource}
           filters={filters}
-          breakdownBy={breakdownBy}
+          breakdownBy={effectiveBreakdownBy}
+          from={from}
+          to={to}
+          timeRange={timeRange}
+          onTimeRangeChange={setTimeRange}
+        />
+      )}
+      {tab === 'tools' && (
+        <DashboardToolsGrid
+          dataSource={dataSource}
+          filters={filters}
+          breakdownBy={effectiveBreakdownBy}
           from={from}
           to={to}
           timeRange={timeRange}
@@ -140,7 +169,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         <DashboardEvalGrid
           dataSource={dataSource}
           filters={filters}
-          breakdownBy={breakdownBy}
+          breakdownBy={effectiveBreakdownBy}
           from={from}
           to={to}
           timeRange={timeRange}

@@ -9,6 +9,8 @@ import { PLUGIN_BASE, ROUTES } from '../constants';
 const LandingPage = React.lazy(() => import('../pages/LandingPage'));
 const PlaygroundSparklesPage = React.lazy(() => import('../pages/PlaygroundSparklesPage'));
 const DashboardPage = React.lazy(() => import('../pages/DashboardPage'));
+const ToolsPage = React.lazy(() => import('../pages/ToolsPage'));
+const ToolAnalyticsPage = React.lazy(() => import('../pages/ToolAnalyticsPage'));
 const TutorialPage = React.lazy(() => import('../pages/TutorialPage'));
 const ConversationsBrowserPage = React.lazy(() => import('../pages/ConversationsBrowserPage'));
 const ConversationExplorePage = React.lazy(() => import('../pages/ConversationExplorePage'));
@@ -52,13 +54,37 @@ function useAgentDetailPageNav(): NavModelItem | undefined {
   }, [matchedName, isAnonymous]);
 }
 
+function useToolAnalyticsPageNav(): NavModelItem | undefined {
+  const location = useLocation();
+  const toolMatch = location.pathname.match(new RegExp(`${PLUGIN_BASE}/${ROUTES.AnalyticsTools}/([^/]+)`));
+  const matchedToolName = toolMatch ? decodeURIComponent(toolMatch[1]) : undefined;
+
+  return React.useMemo(() => {
+    if (!matchedToolName) {
+      return undefined;
+    }
+
+    return {
+      text: matchedToolName,
+      parentItem: {
+        text: 'Tools',
+        url: `${PLUGIN_BASE}/${ROUTES.AnalyticsTools}`,
+      },
+    };
+  }, [matchedToolName]);
+}
+
 export default function App(props: AppRootProps) {
   const styles = useStyles2(getStyles);
   const location = useLocation();
   const agentDetailPageNav = useAgentDetailPageNav();
+  const toolAnalyticsPageNav = useToolAnalyticsPageNav();
   const pageNav = React.useMemo<NavModelItem>(() => {
     if (agentDetailPageNav) {
       return agentDetailPageNav;
+    }
+    if (toolAnalyticsPageNav) {
+      return toolAnalyticsPageNav;
     }
     return {
       text: props.meta.name,
@@ -67,7 +93,7 @@ export default function App(props: AppRootProps) {
       icon: undefined,
       hideFromBreadcrumbs: true,
     };
-  }, [props.meta.name, agentDetailPageNav]);
+  }, [props.meta.name, agentDetailPageNav, toolAnalyticsPageNav]);
   const shouldHidePluginHeader = location.pathname.includes(`/${ROUTES.Conversations}`);
   const shouldUseFullBleedPageInner =
     location.pathname.includes(`/${ROUTES.PlaygroundSparkles}`) ||
@@ -107,6 +133,8 @@ export default function App(props: AppRootProps) {
           }
         />
         <Route path={ROUTES.Analytics} element={<DashboardPage />} />
+        <Route path={ROUTES.AnalyticsTools} element={<ToolsPage />} />
+        <Route path={ROUTES.AnalyticsTool} element={<ToolAnalyticsPage />} />
         <Route path={`${ROUTES.Tutorial}/*`} element={<TutorialPage />} />
         <Route
           path={ROUTES.Conversations}

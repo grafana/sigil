@@ -93,7 +93,7 @@ export type ModelCardResolveResponse = {
 };
 
 // Dashboard tab
-export type DashboardTab = 'overview' | 'performance' | 'errors' | 'usage' | 'evaluation';
+export type DashboardTab = 'overview' | 'performance' | 'errors' | 'usage' | 'tools' | 'evaluation';
 
 // Dashboard filter state
 
@@ -135,7 +135,7 @@ export const emptyFilters: DashboardFilters = {
 
 // Breakdown dimension for timeseries group-by
 
-export type BreakdownDimension = 'none' | 'provider' | 'model' | 'agent';
+export type BreakdownDimension = 'none' | 'provider' | 'model' | 'agent' | 'tool';
 
 // Latency percentile selector
 
@@ -160,6 +160,7 @@ export const breakdownLabel: Record<BreakdownDimension, string> = {
   provider: 'Provider',
   model: 'Model',
   agent: 'Agent',
+  tool: 'Tool',
 };
 
 export const breakdownToPromLabel: Record<BreakdownDimension, string> = {
@@ -167,6 +168,7 @@ export const breakdownToPromLabel: Record<BreakdownDimension, string> = {
   provider: 'gen_ai_provider_name',
   model: 'gen_ai_request_model',
   agent: 'gen_ai_agent_name',
+  tool: 'gen_ai_request_model',
 };
 
 // Conversation ordering options (used in conversations browser page)
