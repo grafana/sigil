@@ -8,6 +8,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+const workerUnknownLabel = "unknown"
+
 var (
 	evalExecutionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "sigil_eval_executions_total",
@@ -85,11 +87,15 @@ func observeExecutionDuration(tenantID, evaluatorID, evaluatorKind, ruleID strin
 }
 
 func observeProducedScore(tenantID, evaluatorID, evaluatorKind, ruleID, scoreKey string, passed *bool, evalModel, genModel, provider, agentName string) {
-	passedValue := "unknown"
-	if passed != nil {
-		passedValue = strconv.FormatBool(*passed)
-	}
+	passedValue := boolLabel(passed)
 	evalScoresTotal.WithLabelValues(tenantID, evaluatorID, evaluatorKind, ruleID, scoreKey, passedValue, evalModel, genModel, provider, agentName).Inc()
+}
+
+func boolLabel(value *bool) string {
+	if value == nil {
+		return workerUnknownLabel
+	}
+	return strconv.FormatBool(*value)
 }
 
 func setQueueDepth(tenantID, status string, count int64) {
