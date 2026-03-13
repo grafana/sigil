@@ -29,6 +29,10 @@ This makes `GRA-56` mostly the recovery-semantics side of `GRA-54`, not an indep
 - Dominant storage symptom: `generation_scores` insert attempts completing with `[rows:0]`
 - Secondary signal: two MySQL connectivity errors around 2026-03-12 13:39 to 13:41 CET
 - Recovery signal: no evidence that retries, pod restarts, or later claim cycles drained terminal failures
+- Representative log samples from task `a2a-f2151b8c-4074-47b3-9bce-0422e2f3000a` / context `2be9db50-cb8f-4aff-926b-ee9dc2d64dd4`:
+  - 2026-03-12 13:18:42 CET, `sigil-eval-worker-68f4854b47-nznpz`: `INSERT INTO generation_scores ... [rows:0] [3.4ms]`
+  - 2026-03-12 13:18:46 CET, `sigil-eval-worker-68f4854b47-nznpz`: `INSERT INTO generation_scores ... [rows:0] [3.8ms]`
+  - 2026-03-12 13:18:50 CET, `sigil-eval-worker-68f4854b47-nznpz`: `INSERT INTO generation_scores ... [rows:0] [3.9ms]`
 
 ### Repository code path
 
