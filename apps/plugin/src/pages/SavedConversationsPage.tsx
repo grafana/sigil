@@ -204,6 +204,7 @@ export default function SavedConversationsPage({
           )
         );
       }
+      setPrevCursors([]);
       await loadConversations();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to unsave conversations');
@@ -218,6 +219,7 @@ export default function SavedConversationsPage({
     try {
       await Promise.all([...ids].map((id) => dataSource.removeCollectionMember(activeCollectionID, id)));
       setSelectedIDs(new Set());
+      setPrevCursors([]);
       await loadConversations();
       setCollections((prev) =>
         prev.map((c) =>
@@ -236,6 +238,7 @@ export default function SavedConversationsPage({
     fetchAllCollections(dataSource)
       .then((items) => setCollections(items))
       .catch((e) => setError(e instanceof Error ? e.message : 'Failed to refresh collections'));
+    setPrevCursors([]);
     await loadConversations();
   };
 

@@ -190,4 +190,41 @@ describe('SavedConversationsPage', () => {
       expect(ds.removeCollectionMember).toHaveBeenCalledWith('col-1', 's1');
     });
   });
+
+  it('disables Prev after removing from collection reloads first page', async () => {
+    const page1Conversation = makeSC('s1', 'Page one');
+    const page2Conversation = makeSC('s2', 'Page two');
+    const ds = buildDataSource({
+      listCollectionMembers: jest.fn(
+        async (_collectionID: string, _limit: number, cursor?: string): Promise<CollectionMembersResponse> => {
+          if (cursor === 'cursor-2') {
+            return { items: [page2Conversation], next_cursor: '' };
+          }
+          return { items: [page1Conversation], next_cursor: 'cursor-2' };
+        }
+      ),
+    });
+
+    render(
+      <MemoryRouter>
+        <SavedConversationsPage dataSource={ds} />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => screen.getByText('Regression tests'));
+    fireEvent.click(screen.getByText('Regression tests'));
+    await waitFor(() => screen.getByText('Page one'));
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    await waitFor(() => screen.getByText('Page two'));
+
+    const prevButton = screen.getByRole('button', { name: /prev/i });
+    expect(prevButton).not.toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText('Select Page two'));
+    fireEvent.click(screen.getByText(/remove from collection/i));
+
+    await waitFor(() => expect(ds.removeCollectionMember).toHaveBeenCalledWith('col-1', 's2'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /prev/i })).toBeDisabled());
+  });
 });
