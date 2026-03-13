@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { MemoryRouter } from 'react-router-dom';
 import SavedConversationsPage from '../../pages/SavedConversationsPage';
 import type { EvaluationDataSource } from '../../evaluation/api';

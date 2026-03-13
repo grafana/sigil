@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { SavedConversationsList } from '../../components/saved-conversations/SavedConversationsList';
 import type { SavedConversation } from '../../evaluation/types';
 

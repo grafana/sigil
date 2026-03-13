@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { AddToCollectionModal } from '../../components/saved-conversations/AddToCollectionModal';
 import type { Collection } from '../../evaluation/types';
 
