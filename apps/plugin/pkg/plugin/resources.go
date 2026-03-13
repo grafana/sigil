@@ -2074,6 +2074,13 @@ func shouldBypassUpstreamConversationSearch(payload conversationSearchRequest) (
 	}
 	for _, term := range parsedFilters.TempoTerms {
 		key := strings.TrimSpace(term.RawKey)
+		// Tool-scoped drilldowns already work through the plugin's Tempo +
+		// batch-metadata path. Bypassing upstream here avoids rollout skew where
+		// the app starts emitting tool filters before the Sigil search endpoint on
+		// the target environment can serve them reliably.
+		if key == "tool.name" {
+			return true, nil
+		}
 		if strings.HasPrefix(key, "span.") || strings.HasPrefix(key, "resource.") {
 			return true, nil
 		}
