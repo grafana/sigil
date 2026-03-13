@@ -5,16 +5,17 @@ import type { Collection } from '../../evaluation/types';
 import type { EvaluationDataSource } from '../../evaluation/api';
 
 const makeCollection = (id: string, name: string): Collection => ({
-  tenant_id: 'test', collection_id: id, name,
-  created_by: 'user', updated_by: 'user',
-  created_at: '2026-03-01T00:00:00Z', updated_at: '2026-03-01T00:00:00Z',
+  tenant_id: 'test',
+  collection_id: id,
+  name,
+  created_by: 'user',
+  updated_by: 'user',
+  created_at: '2026-03-01T00:00:00Z',
+  updated_at: '2026-03-01T00:00:00Z',
   member_count: 2,
 });
 
-const collections: Collection[] = [
-  makeCollection('col-1', 'Regression tests'),
-  makeCollection('col-2', 'Bug reports'),
-];
+const collections: Collection[] = [makeCollection('col-1', 'Regression tests'), makeCollection('col-2', 'Bug reports')];
 
 function buildDataSource(): Pick<EvaluationDataSource, 'addCollectionMembers' | 'createCollection'> {
   return {

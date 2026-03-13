@@ -8,7 +8,9 @@ export default {
 export const Default = {
   args: {
     isOpen: true,
-    onSubmit: async (values: { name: string; description?: string }) => { console.log('submit', values); },
+    onSubmit: async (values: { name: string; description?: string }) => {
+      console.log('submit', values);
+    },
     onClose: () => {},
   },
 };

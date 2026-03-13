@@ -2,9 +2,13 @@ import { AddToCollectionModal } from '../../components/saved-conversations/AddTo
 import type { Collection } from '../../evaluation/types';
 
 const makeCollection = (id: string, name: string, count: number): Collection => ({
-  tenant_id: 'demo', collection_id: id, name,
-  created_by: 'user', updated_by: 'user',
-  created_at: '2026-03-01T00:00:00Z', updated_at: '2026-03-01T00:00:00Z',
+  tenant_id: 'demo',
+  collection_id: id,
+  name,
+  created_by: 'user',
+  updated_by: 'user',
+  created_at: '2026-03-01T00:00:00Z',
+  updated_at: '2026-03-01T00:00:00Z',
   member_count: count,
 });
 

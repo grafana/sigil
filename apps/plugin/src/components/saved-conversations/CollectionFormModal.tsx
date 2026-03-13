@@ -103,11 +103,7 @@ export function CollectionFormModal({ isOpen, onSubmit, onClose }: CollectionFor
           <Button variant="secondary" onClick={handleClose} disabled={submitting}>
             Cancel
           </Button>
-          <Button
-            variant="primary"
-            onClick={handleSubmit}
-            disabled={submitting || name.trim() === ''}
-          >
+          <Button variant="primary" onClick={handleSubmit} disabled={submitting || name.trim() === ''}>
             {submitting ? 'Creating...' : 'Create'}
           </Button>
         </div>

@@ -242,11 +242,17 @@ export function SavedConversationsList({
     if (sortCol) {
       result = [...result].sort((a, b) => {
         let cmp = 0;
-        if (sortCol === 'name') { cmp = a.name.localeCompare(b.name); }
-        else if (sortCol === 'gens') { cmp = a.generation_count - b.generation_count; }
-        else if (sortCol === 'tokens') { cmp = a.total_tokens - b.total_tokens; }
-        else if (sortCol === 'saved_by') { cmp = (a.saved_by ?? '').localeCompare(b.saved_by ?? ''); }
-        else if (sortCol === 'created_at') { cmp = a.created_at.localeCompare(b.created_at); }
+        if (sortCol === 'name') {
+          cmp = a.name.localeCompare(b.name);
+        } else if (sortCol === 'gens') {
+          cmp = a.generation_count - b.generation_count;
+        } else if (sortCol === 'tokens') {
+          cmp = a.total_tokens - b.total_tokens;
+        } else if (sortCol === 'saved_by') {
+          cmp = (a.saved_by ?? '').localeCompare(b.saved_by ?? '');
+        } else if (sortCol === 'created_at') {
+          cmp = a.created_at.localeCompare(b.created_at);
+        }
         return sortDir === 'asc' ? cmp : -cmp;
       });
     }
@@ -289,11 +295,21 @@ export function SavedConversationsList({
             Add to collection
           </Button>
           {activeCollectionID !== null && (
-            <Button variant="secondary" icon="minus-circle" disabled={!hasSelection} onClick={() => onRemoveFromCollection(selectedIDs)}>
+            <Button
+              variant="secondary"
+              icon="minus-circle"
+              disabled={!hasSelection}
+              onClick={() => onRemoveFromCollection(selectedIDs)}
+            >
               Remove from collection
             </Button>
           )}
-          <Button variant="destructive" icon="trash-alt" disabled={!hasSelection} onClick={() => setShowUnsaveConfirm(true)}>
+          <Button
+            variant="destructive"
+            icon="trash-alt"
+            disabled={!hasSelection}
+            onClick={() => setShowUnsaveConfirm(true)}
+          >
             Unsave
           </Button>
         </div>
@@ -334,8 +350,17 @@ export function SavedConversationsList({
       <div className={styles.colHeaders}>
         <Checkbox value={allSelected} onChange={toggleSelectAll} aria-label="Select all" />
         {(['name', 'Agents', 'gens', 'tokens', 'saved_by', 'created_at'] as const).map((col) => {
-          const label: Record<string, string> = { name: 'Name', Agents: 'Agents', gens: 'Gens', tokens: 'Tokens', saved_by: 'Saved by', created_at: 'Saved' };
-          if (col === 'Agents') { return <span key={col}>Agents</span>; }
+          const label: Record<string, string> = {
+            name: 'Name',
+            Agents: 'Agents',
+            gens: 'Gens',
+            tokens: 'Tokens',
+            saved_by: 'Saved by',
+            created_at: 'Saved',
+          };
+          if (col === 'Agents') {
+            return <span key={col}>Agents</span>;
+          }
           const isActive = sortCol === col;
           return (
             <span
@@ -344,10 +369,11 @@ export function SavedConversationsList({
               onClick={() => toggleSort(col as SortCol)}
             >
               {label[col]}
-              {isActive
-                ? <Icon name={sortDir === 'asc' ? 'arrow-up' : 'arrow-down'} size="xs" />
-                : <Icon name="arrows-v" size="xs" />
-              }
+              {isActive ? (
+                <Icon name={sortDir === 'asc' ? 'arrow-up' : 'arrow-down'} size="xs" />
+              ) : (
+                <Icon name="arrows-v" size="xs" />
+              )}
             </span>
           );
         })}
@@ -391,9 +417,7 @@ export function SavedConversationsList({
                     {(sc.agent_names ?? []).slice(0, 5).map((name) => (
                       <Badge key={name} text={name} color="darkgrey" title={name} />
                     ))}
-                    {(sc.agent_names ?? []).length > 5 && (
-                      <span className={styles.agentOverflow}>…</span>
-                    )}
+                    {(sc.agent_names ?? []).length > 5 && <span className={styles.agentOverflow}>…</span>}
                   </>
                 )}
               </div>
@@ -408,7 +432,9 @@ export function SavedConversationsList({
 
       {/* Pagination */}
       <div className={styles.pagination}>
-        <span>{totalCount ?? conversations.length} conversation{(totalCount ?? conversations.length) !== 1 ? 's' : ''}</span>
+        <span>
+          {totalCount ?? conversations.length} conversation{(totalCount ?? conversations.length) !== 1 ? 's' : ''}
+        </span>
         <div className={styles.pageNav}>
           <div className={styles.pageSizeSelect}>
             <span>Rows per page</span>
@@ -436,7 +462,10 @@ export function SavedConversationsList({
         body={`Remove ${selectedIDs.size} conversation${selectedIDs.size !== 1 ? 's' : ''} from saved? This cannot be undone.`}
         confirmText="Unsave"
         confirmButtonVariant="destructive"
-        onConfirm={() => { setShowUnsaveConfirm(false); onUnsave(selectedIDs); }}
+        onConfirm={() => {
+          setShowUnsaveConfirm(false);
+          onUnsave(selectedIDs);
+        }}
         onDismiss={() => setShowUnsaveConfirm(false)}
       />
     </div>

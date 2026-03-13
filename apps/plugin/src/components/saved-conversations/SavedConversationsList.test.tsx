@@ -72,46 +72,23 @@ describe('SavedConversationsList', () => {
   });
 
   it('shows selection toolbar when items are selected', () => {
-    render(
-      <SavedConversationsList
-        {...defaultProps}
-        selectedIDs={new Set(['s1', 's2'])}
-      />
-    );
+    render(<SavedConversationsList {...defaultProps} selectedIDs={new Set(['s1', 's2'])} />);
     expect(screen.getByText(/2 selected/i)).toBeInTheDocument();
     expect(screen.getByText(/add to collection/i)).toBeInTheDocument();
   });
 
   it('hides Remove button when activeCollectionID is null', () => {
-    render(
-      <SavedConversationsList
-        {...defaultProps}
-        selectedIDs={new Set(['s1'])}
-        activeCollectionID={null}
-      />
-    );
+    render(<SavedConversationsList {...defaultProps} selectedIDs={new Set(['s1'])} activeCollectionID={null} />);
     expect(screen.queryByText(/remove from collection/i)).not.toBeInTheDocument();
   });
 
   it('shows Remove button when a collection is active', () => {
-    render(
-      <SavedConversationsList
-        {...defaultProps}
-        selectedIDs={new Set(['s1'])}
-        activeCollectionID="col-1"
-      />
-    );
+    render(<SavedConversationsList {...defaultProps} selectedIDs={new Set(['s1'])} activeCollectionID="col-1" />);
     expect(screen.getByText(/remove from collection/i)).toBeInTheDocument();
   });
 
   it('calls onRemoveFromCollection when Remove is clicked', () => {
-    render(
-      <SavedConversationsList
-        {...defaultProps}
-        selectedIDs={new Set(['s1', 's2'])}
-        activeCollectionID="col-1"
-      />
-    );
+    render(<SavedConversationsList {...defaultProps} selectedIDs={new Set(['s1', 's2'])} activeCollectionID="col-1" />);
     fireEvent.click(screen.getByText(/remove from collection/i));
     expect(onRemoveFromCollection).toHaveBeenCalledWith(new Set(['s1', 's2']));
   });
@@ -134,37 +111,27 @@ describe('SavedConversationsList', () => {
   });
 
   it('calls onAddToCollection when Add to collection is clicked', () => {
-    render(
-      <SavedConversationsList
-        {...defaultProps}
-        selectedIDs={new Set(['s1'])}
-      />
-    );
+    render(<SavedConversationsList {...defaultProps} selectedIDs={new Set(['s1'])} />);
     fireEvent.click(screen.getByText(/add to collection/i));
     expect(onAddToCollection).toHaveBeenCalled();
   });
 
   it('shows — for empty agent_names', () => {
     const noAgents = { ...makeSC('s4', 'No agents'), agent_names: [] };
-    render(
-      <SavedConversationsList
-        {...defaultProps}
-        conversations={[noAgents]}
-      />
-    );
+    render(<SavedConversationsList {...defaultProps} conversations={[noAgents]} />);
     // Empty agents, gens, and tokens all show '—'
     const dashes = screen.getAllByText('—');
     expect(dashes.length).toBeGreaterThanOrEqual(3);
   });
 
   it('shows agent names and enrichment data', () => {
-    const rich = { ...makeSC('s5', 'Rich conv'), agent_names: ['agent-a', 'agent-b'], generation_count: 4, total_tokens: 1234 };
-    render(
-      <SavedConversationsList
-        {...defaultProps}
-        conversations={[rich]}
-      />
-    );
+    const rich = {
+      ...makeSC('s5', 'Rich conv'),
+      agent_names: ['agent-a', 'agent-b'],
+      generation_count: 4,
+      total_tokens: 1234,
+    };
+    render(<SavedConversationsList {...defaultProps} conversations={[rich]} />);
     expect(screen.getByText('agent-a')).toBeInTheDocument();
     expect(screen.getByText('agent-b')).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();

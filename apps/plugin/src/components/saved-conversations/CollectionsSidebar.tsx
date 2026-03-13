@@ -150,7 +150,9 @@ export function CollectionsSidebar({
   }, [menuState]);
 
   useEffect(() => {
-    if (menuState?.type !== 'menu') {return;}
+    if (menuState?.type !== 'menu') {
+      return;
+    }
     const close = () => setMenuState(null);
     document.addEventListener('mousedown', close);
     document.addEventListener('scroll', close, true);
@@ -236,78 +238,85 @@ export function CollectionsSidebar({
 
           return (
             <React.Fragment key={col.collection_id}>
-            <div
-              className={`${styles.collectionItem} ${isActive ? styles.collectionItemActive : ''}`}
-              onClick={() => !isRenaming && onSelect(col.collection_id)}
-            >
-              {isRenaming ? (
-                <>
-                  <Input
-                    ref={renameInputRef}
-                    className={styles.renameInput}
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.currentTarget.value)}
-                    invalid={!!renameError}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {confirmRename(col.collection_id);}
-                      if (e.key === 'Escape') {cancelRename();}
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <IconButton name="check" tooltip="Confirm rename" onClick={() => confirmRename(col.collection_id)} />
-                  <IconButton name="times" tooltip="Cancel rename" onClick={cancelRename} />
-                </>
-              ) : (
-                <>
-                  <span className={styles.collectionName}>{col.name}</span>
-                  <span className={styles.count}>{col.member_count}</span>
-                  <span
-                    data-kebab
-                    className={styles.kebab}
-                  >
-                    <IconButton
-                      name="ellipsis-v"
-                      tooltip="Collection options"
-                      aria-label="collection options"
-                      size="sm"
-                      onClick={(e) => openMenu(e, col.collection_id)}
+              <div
+                className={`${styles.collectionItem} ${isActive ? styles.collectionItemActive : ''}`}
+                onClick={() => !isRenaming && onSelect(col.collection_id)}
+              >
+                {isRenaming ? (
+                  <>
+                    <Input
+                      ref={renameInputRef}
+                      className={styles.renameInput}
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.currentTarget.value)}
+                      invalid={!!renameError}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          confirmRename(col.collection_id);
+                        }
+                        if (e.key === 'Escape') {
+                          cancelRename();
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
                     />
-                  </span>
-                  {menuState?.type === 'menu' && menuState.collectionID === col.collection_id && (
-                    <div
-                      className={styles.menuPopover}
-                      style={{ top: menuState.menuPosition?.top, right: menuState.menuPosition?.right }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                    >
-                      <div className={styles.menuItem} onClick={(e) => { e.stopPropagation(); startRename(col); }}>
-                        Rename
-                      </div>
+                    <IconButton
+                      name="check"
+                      tooltip="Confirm rename"
+                      onClick={() => confirmRename(col.collection_id)}
+                    />
+                    <IconButton name="times" tooltip="Cancel rename" onClick={cancelRename} />
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.collectionName}>{col.name}</span>
+                    <span className={styles.count}>{col.member_count}</span>
+                    <span data-kebab className={styles.kebab}>
+                      <IconButton
+                        name="ellipsis-v"
+                        tooltip="Collection options"
+                        aria-label="collection options"
+                        size="sm"
+                        onClick={(e) => openMenu(e, col.collection_id)}
+                      />
+                    </span>
+                    {menuState?.type === 'menu' && menuState.collectionID === col.collection_id && (
                       <div
-                        className={`${styles.menuItem} ${styles.menuItemDanger}`}
-                        onClick={(e) => { e.stopPropagation(); setMenuState({ collectionID: col.collection_id, type: 'delete' }); }}
+                        className={styles.menuPopover}
+                        style={{ top: menuState.menuPosition?.top, right: menuState.menuPosition?.right }}
+                        onMouseDown={(e) => e.stopPropagation()}
                       >
-                        Delete
+                        <div
+                          className={styles.menuItem}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startRename(col);
+                          }}
+                        >
+                          Rename
+                        </div>
+                        <div
+                          className={`${styles.menuItem} ${styles.menuItemDanger}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuState({ collectionID: col.collection_id, type: 'delete' });
+                          }}
+                        >
+                          Delete
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-            {isRenaming && renameError && (
-              <Alert severity="error" title={renameError} style={{ marginTop: 4 }} />
-            )}
+                    )}
+                  </>
+                )}
+              </div>
+              {isRenaming && renameError && <Alert severity="error" title={renameError} style={{ marginTop: 4 }} />}
             </React.Fragment>
           );
         })}
       </div>
 
       <div className={styles.footer}>
-        <Button
-          variant="primary"
-          icon="plus"
-          className={styles.newCollectionBtn}
-          onClick={onCreateCollection}
-        >
+        <Button variant="primary" icon="plus" className={styles.newCollectionBtn} onClick={onCreateCollection}>
           New collection
         </Button>
       </div>

@@ -121,7 +121,9 @@ export function AddToCollectionModal({
             + Create new collection
           </button>
           <div className={styles.footer}>
-            <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button variant="secondary" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
             <Button variant="primary" onClick={handleSave} disabled={saving || selectedCollectionIDs.length === 0}>
               {saving ? 'Saving...' : 'Save'}
             </Button>
