@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2, type TimeRange } from '@grafana/data';
 import { Alert, Icon, useStyles2 } from '@grafana/ui';
@@ -18,9 +18,12 @@ import {
   buildToolRows,
   formatToolCount,
   formatToolDurationSeconds,
+  handleToolRowClick,
   readToolMetricMap,
+  type ToolSortKey,
   type ToolSummaryRow,
 } from '../../dashboard/toolRuntimeTable';
+import { useToolSort } from '../../hooks/useToolSort';
 import { buildToolsUrl } from '../../dashboard/url';
 import { matrixToDataFrames, vectorToStatValue } from '../../dashboard/transforms';
 import { BreakdownStatPanel, formatWindowLabel } from './dashboardShared';
@@ -52,9 +55,6 @@ type DashboardToolsGridProps = {
   onTimeRangeChange: (timeRange: TimeRange) => void;
 };
 
-type ToolSortKey = 'toolName' | 'executions' | 'errors' | 'errorRate' | 'latencyP95';
-type ToolSortDirection = 'asc' | 'desc';
-
 const CHART_HEIGHT = 250;
 const TABLE_PREVIEW_ROWS = 8;
 
@@ -75,8 +75,7 @@ export function DashboardToolsGrid({
   onTimeRangeChange,
 }: DashboardToolsGridProps) {
   const styles = useStyles2(getStyles);
-  const [sortKey, setSortKey] = useState<ToolSortKey>('executions');
-  const [sortDirection, setSortDirection] = useState<ToolSortDirection>('desc');
+  const { sortKey, sortDirection, handleSortChange, sortRows } = useToolSort();
   const sanitizedFilters = useMemo(() => sanitizeToolAnalyticsFilters(filters), [filters]);
   const metricFilters = useMemo(() => buildExecuteToolMetricFilters(sanitizedFilters), [sanitizedFilters]);
   const windowSize = useMemo(() => Math.max(0, to - from), [from, to]);
@@ -87,6 +86,7 @@ export function DashboardToolsGrid({
   const step = useMemo(() => computeStep(from, to), [from, to]);
   const interval = useMemo(() => computeRateInterval(step), [step]);
   const comparisonLabel = useMemo(() => `previous ${formatWindowLabel(windowSize)}`, [windowSize]);
+  const queryBreakdownBy = breakdownBy === 'none' ? 'tool' : breakdownBy;
   const breakdownLabel = useMemo(() => {
     switch (breakdownBy) {
       case 'agent':
@@ -195,7 +195,7 @@ export function DashboardToolsGrid({
   );
   const usageOverTime = usePrometheusQuery(
     dataSource,
-    requestCountOverTimeQuery(metricFilters, `${step}s`, breakdownBy),
+    requestCountOverTimeQuery(metricFilters, `${step}s`, queryBreakdownBy),
     from,
     to,
     'range',
@@ -203,7 +203,7 @@ export function DashboardToolsGrid({
   );
   const errorRateOverTime = usePrometheusQuery(
     dataSource,
-    errorRateOverTimeQuery(metricFilters, interval, breakdownBy),
+    errorRateOverTimeQuery(metricFilters, interval, queryBreakdownBy),
     from,
     to,
     'range',
@@ -211,7 +211,7 @@ export function DashboardToolsGrid({
   );
   const latencyP95OverTime = usePrometheusQuery(
     dataSource,
-    latencyOverTimeQuery(metricFilters, interval, breakdownBy, 0.95),
+    latencyOverTimeQuery(metricFilters, interval, queryBreakdownBy, 0.95),
     from,
     to,
     'range',
@@ -219,21 +219,21 @@ export function DashboardToolsGrid({
   );
   const breakdownExecutions = usePrometheusQuery(
     dataSource,
-    totalOpsQuery(metricFilters, rangeDuration, breakdownBy),
+    totalOpsQuery(metricFilters, rangeDuration, queryBreakdownBy),
     from,
     to,
     'instant'
   );
   const breakdownErrors = usePrometheusQuery(
     dataSource,
-    totalErrorsQuery(metricFilters, rangeDuration, breakdownBy),
+    totalErrorsQuery(metricFilters, rangeDuration, queryBreakdownBy),
     from,
     to,
     'instant'
   );
   const breakdownLatencyP95 = usePrometheusQuery(
     dataSource,
-    latencyStatQuery(metricFilters, rangeDuration, breakdownBy, 0.95),
+    latencyStatQuery(metricFilters, rangeDuration, queryBreakdownBy, 0.95),
     from,
     to,
     'instant'
@@ -281,33 +281,7 @@ export function DashboardToolsGrid({
     [sanitizedFilters, timeRange, toolErrorRates.data, toolErrors.data, toolExecutions.data, toolLatencyP95.data]
   );
 
-  const sortedRows = useMemo(() => {
-    const directionFactor = sortDirection === 'asc' ? 1 : -1;
-    return [...rows].sort((left, right) => {
-      let comparison = 0;
-      switch (sortKey) {
-        case 'toolName':
-          comparison = left.toolName.localeCompare(right.toolName);
-          break;
-        case 'executions':
-          comparison = left.executions - right.executions;
-          break;
-        case 'errors':
-          comparison = left.errors - right.errors;
-          break;
-        case 'errorRate':
-          comparison = left.errorRate - right.errorRate;
-          break;
-        case 'latencyP95':
-          comparison = left.latencyP95 - right.latencyP95;
-          break;
-      }
-      if (comparison !== 0) {
-        return comparison * directionFactor;
-      }
-      return left.toolName.localeCompare(right.toolName);
-    });
-  }, [rows, sortDirection, sortKey]);
+  const sortedRows = useMemo(() => sortRows(rows), [rows, sortRows]);
   const previewRows = useMemo(() => sortedRows.slice(0, TABLE_PREVIEW_ROWS), [sortedRows]);
 
   const pageQueryResponses = [
@@ -333,14 +307,6 @@ export function DashboardToolsGrid({
   const pageHasErrors = pageQueryResponses.some((response) => response.error.length > 0);
   const pageHasData = rows.length > 0 || pageQueryResponses.some((response) => hasResponseData(response.data));
 
-  const handleRowClick = useCallback((row: ToolSummaryRow, event: React.MouseEvent) => {
-    if (event.metaKey || event.ctrlKey) {
-      window.open(row.href, '_blank');
-      return;
-    }
-    window.location.href = row.href;
-  }, []);
-
   const handlePanelTimeRangeChange = useCallback(
     (absoluteRange: AbsoluteTimeRange) => {
       const nextFrom = dateTime(absoluteRange.from);
@@ -352,18 +318,6 @@ export function DashboardToolsGrid({
       });
     },
     [onTimeRangeChange]
-  );
-
-  const handleSortChange = useCallback(
-    (nextKey: ToolSortKey) => {
-      if (nextKey === sortKey) {
-        setSortDirection((current) => (current === 'desc' ? 'asc' : 'desc'));
-        return;
-      }
-      setSortKey(nextKey);
-      setSortDirection(nextKey === 'toolName' ? 'asc' : 'desc');
-    },
-    [sortKey]
   );
 
   const buildSortableHeader = useCallback(
@@ -597,7 +551,7 @@ export function DashboardToolsGrid({
         columns={columns}
         data={previewRows}
         keyOf={(row) => row.toolName}
-        onRowClick={handleRowClick}
+        onRowClick={handleToolRowClick}
         rowRole="link"
         rowAriaLabel={(row) => `open tool analytics for ${row.toolName}`}
         panelTitle="Tools"

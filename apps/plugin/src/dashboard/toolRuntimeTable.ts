@@ -73,6 +73,47 @@ export function buildToolRows(
     });
 }
 
+export type ToolSortKey = 'toolName' | 'executions' | 'errors' | 'errorRate' | 'latencyP95';
+export type ToolSortDirection = 'asc' | 'desc';
+
+export function compareToolRows(left: ToolSummaryRow, right: ToolSummaryRow, sortKey: ToolSortKey): number {
+  switch (sortKey) {
+    case 'toolName':
+      return left.toolName.localeCompare(right.toolName);
+    case 'executions':
+      return left.executions - right.executions;
+    case 'errors':
+      return left.errors - right.errors;
+    case 'errorRate':
+      return left.errorRate - right.errorRate;
+    case 'latencyP95':
+      return left.latencyP95 - right.latencyP95;
+  }
+}
+
+export function sortToolRows(
+  rows: ToolSummaryRow[],
+  sortKey: ToolSortKey,
+  sortDirection: ToolSortDirection
+): ToolSummaryRow[] {
+  const directionFactor = sortDirection === 'asc' ? 1 : -1;
+  return [...rows].sort((left, right) => {
+    const comparison = compareToolRows(left, right, sortKey);
+    if (comparison !== 0) {
+      return comparison * directionFactor;
+    }
+    return left.toolName.localeCompare(right.toolName);
+  });
+}
+
+export function handleToolRowClick(row: ToolSummaryRow, event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'>): void {
+  if (event.metaKey || event.ctrlKey) {
+    window.open(row.href, '_blank');
+    return;
+  }
+  window.location.href = row.href;
+}
+
 export function formatToolCount(value: number): string {
   if (!Number.isFinite(value)) {
     return '0';

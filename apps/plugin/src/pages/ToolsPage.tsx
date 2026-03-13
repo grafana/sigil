@@ -32,9 +32,12 @@ import {
   buildToolRows,
   formatToolCount,
   formatToolDurationSeconds,
+  handleToolRowClick,
   readToolMetricMap,
+  type ToolSortKey,
   type ToolSummaryRow,
 } from '../dashboard/toolRuntimeTable';
+import { useToolSort } from '../hooks/useToolSort';
 import { hasResponseData } from '../components/insight/summarize';
 import { formatWindowLabel } from '../components/dashboard/dashboardShared';
 
@@ -42,14 +45,10 @@ type ToolsPageProps = {
   dataSource?: DashboardDataSource;
 };
 
-type ToolSortKey = 'toolName' | 'executions' | 'errors' | 'errorRate' | 'latencyP95';
-type ToolSortDirection = 'asc' | 'desc';
-
 export default function ToolsPage({ dataSource = defaultDashboardDataSource }: ToolsPageProps) {
   const styles = useStyles2(getStyles);
   const { timeRange, filters, searchParams, setSearchParams, setTimeRange, setFilters } = useFilterUrlState();
-  const [sortKey, setSortKey] = useState<ToolSortKey>('executions');
-  const [sortDirection, setSortDirection] = useState<ToolSortDirection>('desc');
+  const { sortKey, sortDirection, handleSortChange, sortRows } = useToolSort();
   const [showLabelFilterRow, setShowLabelFilterRow] = useState(() => {
     if (typeof window === 'undefined') {
       return false;
@@ -188,33 +187,7 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
     }
     return rows.filter((row) => row.toolName.toLowerCase().includes(normalizedSearch));
   }, [rows, toolSearch]);
-  const sortedRows = useMemo(() => {
-    const directionFactor = sortDirection === 'asc' ? 1 : -1;
-    return [...visibleRows].sort((left, right) => {
-      let comparison = 0;
-      switch (sortKey) {
-        case 'toolName':
-          comparison = left.toolName.localeCompare(right.toolName);
-          break;
-        case 'executions':
-          comparison = left.executions - right.executions;
-          break;
-        case 'errors':
-          comparison = left.errors - right.errors;
-          break;
-        case 'errorRate':
-          comparison = left.errorRate - right.errorRate;
-          break;
-        case 'latencyP95':
-          comparison = left.latencyP95 - right.latencyP95;
-          break;
-      }
-      if (comparison !== 0) {
-        return comparison * directionFactor;
-      }
-      return left.toolName.localeCompare(right.toolName);
-    });
-  }, [sortDirection, sortKey, visibleRows]);
+  const sortedRows = useMemo(() => sortRows(visibleRows), [visibleRows, sortRows]);
 
   const pageQueryResponses = [
     totalExecutions,
@@ -257,26 +230,6 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
       );
     },
     [setSearchParams]
-  );
-
-  const handleRowClick = useCallback((row: ToolSummaryRow, event: React.MouseEvent) => {
-    if (event.metaKey || event.ctrlKey) {
-      window.open(row.href, '_blank');
-      return;
-    }
-    window.location.href = row.href;
-  }, []);
-
-  const handleSortChange = useCallback(
-    (nextKey: ToolSortKey) => {
-      if (nextKey === sortKey) {
-        setSortDirection((current) => (current === 'desc' ? 'asc' : 'desc'));
-        return;
-      }
-      setSortKey(nextKey);
-      setSortDirection(nextKey === 'toolName' ? 'asc' : 'desc');
-    },
-    [sortKey]
   );
 
   const buildSortableHeader = useCallback(
@@ -452,7 +405,7 @@ export default function ToolsPage({ dataSource = defaultDashboardDataSource }: T
         columns={columns}
         data={sortedRows}
         keyOf={(row) => row.toolName}
-        onRowClick={handleRowClick}
+        onRowClick={handleToolRowClick}
         rowRole="link"
         rowAriaLabel={(row) => `open tool analytics for ${row.toolName}`}
         loading={pageIsLoading && rows.length === 0}
