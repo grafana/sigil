@@ -5,6 +5,8 @@ import DashboardPage from './DashboardPage';
 import type { DashboardDataSource } from '../dashboard/api';
 import type { PrometheusQueryResponse } from '../dashboard/types';
 
+const mockDashboardToolsGrid = jest.fn<void, [unknown]>();
+
 // ResizeObserver is not available in JSDOM.
 beforeAll(() => {
   global.ResizeObserver = class {
@@ -77,6 +79,13 @@ jest.mock('../components/landing/LandingTopBar', () => ({
   LandingTopBar: () => <div data-testid="landing-top-bar" />,
 }));
 
+jest.mock('../components/dashboard/DashboardToolsGrid', () => ({
+  DashboardToolsGrid: (props: unknown) => {
+    mockDashboardToolsGrid(props);
+    return <div data-testid="dashboard-tools-grid" />;
+  },
+}));
+
 const emptyVector: PrometheusQueryResponse = {
   status: 'success',
   data: { resultType: 'vector', result: [] },
@@ -119,6 +128,10 @@ function renderWithRouter(ds: MockDashboardDataSource, initialEntry = '/') {
 }
 
 describe('DashboardPage', () => {
+  beforeEach(() => {
+    mockDashboardToolsGrid.mockClear();
+  });
+
   it('renders filter bar and paired metric rows', async () => {
     const ds = createDataSource();
     await act(async () => {
@@ -201,8 +214,24 @@ describe('DashboardPage', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('panel-Tool executions over time')).toBeInTheDocument();
-      expect(screen.getByText('No execute_tool runtime data matched the current filters.')).toBeInTheDocument();
+      expect(screen.getByTestId('dashboard-tools-grid')).toBeInTheDocument();
     });
+  });
+
+  it('normalizes a stale model breakdown on the tools tab', async () => {
+    const ds = createDataSource();
+    await act(async () => {
+      renderWithRouter(ds, '/?tab=tools&breakdownBy=model');
+    });
+
+    await waitFor(() => {
+      expect(mockDashboardToolsGrid).toHaveBeenCalled();
+    });
+
+    expect(mockDashboardToolsGrid.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        breakdownBy: 'tool',
+      })
+    );
   });
 });
