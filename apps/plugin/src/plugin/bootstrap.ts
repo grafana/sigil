@@ -57,7 +57,13 @@ export async function bootstrap<T extends KeyValue>(plugin: AppPlugin<T>): Promi
             type: 'histogram',
             unit: 'seconds',
             description: 'Latency of LLM generation calls. Use _bucket for percentiles, _count for throughput.',
-            key_labels: ['gen_ai_provider_name', 'gen_ai_request_model', 'gen_ai_tool_name', 'gen_ai_agent_name', 'error_type'],
+            key_labels: [
+              'gen_ai_provider_name',
+              'gen_ai_request_model',
+              'gen_ai_tool_name',
+              'gen_ai_agent_name',
+              'error_type',
+            ],
             example_queries: [
               'histogram_quantile(0.95, sum by (le) (rate(gen_ai_client_operation_duration_seconds_bucket[5m])))',
               'sum(rate(gen_ai_client_operation_duration_seconds_count[5m]))',
