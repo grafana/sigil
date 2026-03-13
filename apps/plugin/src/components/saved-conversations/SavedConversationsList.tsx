@@ -112,10 +112,6 @@ const getStyles = (theme: GrafanaTheme2) => ({
     whiteSpace: 'nowrap',
     '&:hover': { textDecoration: 'underline' },
   }),
-  paginationActions: css({
-    display: 'flex',
-    gap: theme.spacing(1),
-  }),
   secondary: css({
     color: theme.colors.text.secondary,
     fontSize: theme.typography.bodySmall.fontSize,

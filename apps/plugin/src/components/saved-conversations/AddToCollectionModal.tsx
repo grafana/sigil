@@ -96,7 +96,6 @@ export function AddToCollectionModal({
       setSelectedCollectionIDs((prev) => [...prev, created.collection_id]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create collection');
-      setShowCreateModal(false);
     }
   };
 

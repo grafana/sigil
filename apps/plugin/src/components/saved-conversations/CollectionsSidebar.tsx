@@ -329,9 +329,6 @@ export function CollectionsSidebar({
           confirmText="Delete collection"
           onConfirm={async () => {
             await onDeleteCollection(collectionToDelete.collection_id);
-            if (activeCollectionID === collectionToDelete.collection_id) {
-              onSelect(null);
-            }
             setMenuState(null);
           }}
           onDismiss={() => setMenuState(null)}

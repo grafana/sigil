@@ -139,7 +139,7 @@ describe('CollectionsSidebar', () => {
     expect(onCreateCollection).toHaveBeenCalled();
   });
 
-  it('switches to All saved when deleting the active collection', async () => {
+  it('calls onDeleteCollection when deleting the active collection', async () => {
     onDeleteCollection.mockResolvedValue(undefined);
     render(
       <CollectionsSidebar
@@ -156,7 +156,9 @@ describe('CollectionsSidebar', () => {
     fireEvent.click(screen.getByText(/^delete$/i));
     fireEvent.click(screen.getByTestId('data-testid Confirm Modal Danger Button'));
     await waitFor(() => expect(onDeleteCollection).toHaveBeenCalledWith('col-1'));
-    expect(onSelect).toHaveBeenCalledWith(null);
+    // onSelect(null) is NOT called from the sidebar — the page's handleDeleteCollection
+    // already resets activeCollectionID when the deleted collection was active.
+    expect(onSelect).not.toHaveBeenCalledWith(null);
   });
 
   it('shows filter input when there are more than 5 collections and filters by name', () => {
