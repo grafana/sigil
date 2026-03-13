@@ -143,11 +143,15 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
     }
   }, [dataSource, activeCollectionID, pageSize]);
 
+  // Reset selection/search/pagination only when the active collection changes
   useEffect(() => {
     setSelectedIDs(new Set());
     setSearchQuery('');
     setNextCursor(undefined);
     setPrevCursors([]);
+  }, [activeCollectionID]);
+
+  useEffect(() => {
     loadConversations();
   }, [loadConversations]);
 
