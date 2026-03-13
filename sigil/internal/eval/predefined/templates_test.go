@@ -97,6 +97,17 @@ func TestTemplatesIncludeGroundednessAndNoHallucination(t *testing.T) {
 	}
 }
 
+func TestTemplatesHaveUniqueEvaluatorIDs(t *testing.T) {
+	seen := make(map[string]struct{})
+
+	for _, template := range Templates() {
+		if _, exists := seen[template.EvaluatorID]; exists {
+			t.Fatalf("duplicate predefined template id %q", template.EvaluatorID)
+		}
+		seen[template.EvaluatorID] = struct{}{}
+	}
+}
+
 func TestBoolSafetyTemplatesSetPassValueFalse(t *testing.T) {
 	for _, templateID := range []string{"sigil.toxicity", "sigil.pii"} {
 		found := false
