@@ -16,6 +16,14 @@ class SigilAuthConfigTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("mode 'none'");
 
+        assertThatThrownBy(() -> AuthHeaders.resolve(Map.of(), new AuthConfig().setMode(AuthMode.NONE).setBasicUser("user"), "trace"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mode 'none'");
+
+        assertThatThrownBy(() -> AuthHeaders.resolve(Map.of(), new AuthConfig().setMode(AuthMode.NONE).setBasicPassword("secret"), "trace"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mode 'none'");
+
         assertThatThrownBy(() -> AuthHeaders.resolve(Map.of(), new AuthConfig().setMode(AuthMode.TENANT), "generation export"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("requires tenantId");

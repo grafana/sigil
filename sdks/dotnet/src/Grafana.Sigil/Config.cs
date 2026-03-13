@@ -157,9 +157,11 @@ internal static class ConfigResolver
         switch (auth.Mode)
         {
             case ExportAuthMode.None:
-                if (tenantId.Length > 0 || bearerToken.Length > 0)
+                var noneBasicUser = auth.BasicUser?.Trim() ?? string.Empty;
+                var noneBasicPassword = auth.BasicPassword?.Trim() ?? string.Empty;
+                if (tenantId.Length > 0 || bearerToken.Length > 0 || noneBasicUser.Length > 0 || noneBasicPassword.Length > 0)
                 {
-                    throw new ArgumentException($"{label} auth mode 'none' does not allow tenant_id or bearer_token");
+                    throw new ArgumentException($"{label} auth mode 'none' does not allow credentials");
                 }
                 return resolved;
             case ExportAuthMode.Tenant:

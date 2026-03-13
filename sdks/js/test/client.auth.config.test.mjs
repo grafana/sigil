@@ -81,6 +81,53 @@ test('basic auth mode requires basicUser or tenantId', () => {
   );
 });
 
+test('none auth mode rejects basicUser', () => {
+  assert.throws(
+    () =>
+      new SigilClient({
+        generationExport: {
+          auth: {
+            mode: 'none',
+            basicUser: 'user',
+          },
+        },
+      }),
+    /does not allow credentials/
+  );
+});
+
+test('none auth mode rejects basicPassword', () => {
+  assert.throws(
+    () =>
+      new SigilClient({
+        generationExport: {
+          auth: {
+            mode: 'none',
+            basicPassword: 'secret',
+          },
+        },
+      }),
+    /does not allow credentials/
+  );
+});
+
+test('basic auth handles non-ASCII credentials via UTF-8 encoding', () => {
+  const client = new SigilClient({
+    generationExport: {
+      auth: {
+        mode: 'basic',
+        basicUser: 'ユーザー',
+        basicPassword: 'パスワード',
+      },
+    },
+  });
+
+  const encoded = Buffer.from('ユーザー:パスワード', 'utf-8').toString('base64');
+  const expected = 'Basic ' + encoded;
+  assert.equal(client.config.generationExport.headers?.['Authorization'], expected);
+  client.shutdown();
+});
+
 test('basic auth explicit headers win over auth-derived headers', () => {
   const client = new SigilClient({
     generationExport: {

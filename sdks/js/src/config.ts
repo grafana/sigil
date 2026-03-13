@@ -120,8 +120,10 @@ function resolveHeadersWithAuth(
   const out = headers ? { ...headers } : undefined;
 
   if (mode === 'none') {
-    if (tenantId.length > 0 || bearerToken.length > 0) {
-      throw new Error(`${label} auth mode "none" does not allow tenantId or bearerToken`);
+    const basicUser = auth.basicUser?.trim() ?? '';
+    const basicPassword = auth.basicPassword?.trim() ?? '';
+    if (tenantId.length > 0 || bearerToken.length > 0 || basicUser.length > 0 || basicPassword.length > 0) {
+      throw new Error(`${label} auth mode "none" does not allow credentials`);
     }
     return out;
   }
@@ -172,7 +174,8 @@ function resolveHeadersWithAuth(
     }
     const result: Record<string, string> = { ...(out ?? {}) };
     if (!hasHeaderKey(result, authorizationHeaderName)) {
-      result[authorizationHeaderName] = 'Basic ' + btoa(`${user}:${password}`);
+      const encoded = new TextEncoder().encode(`${user}:${password}`);
+      result[authorizationHeaderName] = 'Basic ' + btoa(String.fromCharCode(...encoded));
     }
     if (tenantId.length > 0 && !hasHeaderKey(result, tenantHeaderName)) {
       result[tenantHeaderName] = tenantId;
