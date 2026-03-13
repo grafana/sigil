@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { CollectionsSidebar } from '../../components/saved-conversations/CollectionsSidebar';
 import type { Collection } from '../../evaluation/types';
 
@@ -16,44 +15,38 @@ const collections: Collection[] = [
   makeCollection('col-3', 'Edge cases', 11),
 ];
 
-const meta: Meta<typeof CollectionsSidebar> = {
+export default {
   title: 'SavedConversations/CollectionsSidebar',
   component: CollectionsSidebar,
 };
-export default meta;
-type Story = StoryObj<typeof CollectionsSidebar>;
 
-export const Default: Story = {
-  render: () => {
-    const [active, setActive] = useState<string | null>(null);
-    return (
-      <div style={{ height: 400, display: 'flex' }}>
-        <CollectionsSidebar
-          collections={collections}
-          totalCount={24}
-          activeCollectionID={active}
-          onSelect={setActive}
-          onCreateCollection={() => alert('create')}
-          onRenameCollection={async (id, name) => console.log('rename', id, name)}
-          onDeleteCollection={async (id) => console.log('delete', id)}
-        />
-      </div>
-    );
-  },
-};
-
-export const Empty: Story = {
-  render: () => (
+export const Default = () => {
+  const [active, setActive] = useState<string | null>(null);
+  return (
     <div style={{ height: 400, display: 'flex' }}>
       <CollectionsSidebar
-        collections={[]}
-        totalCount={0}
-        activeCollectionID={null}
-        onSelect={() => {}}
-        onCreateCollection={() => {}}
-        onRenameCollection={async () => {}}
-        onDeleteCollection={async () => {}}
+        collections={collections}
+        totalCount={24}
+        activeCollectionID={active}
+        onSelect={setActive}
+        onCreateCollection={() => alert('create')}
+        onRenameCollection={async (id, name) => console.log('rename', id, name)}
+        onDeleteCollection={async (id) => console.log('delete', id)}
       />
     </div>
-  ),
+  );
 };
+
+export const Empty = () => (
+  <div style={{ height: 400, display: 'flex' }}>
+    <CollectionsSidebar
+      collections={[]}
+      totalCount={0}
+      activeCollectionID={null}
+      onSelect={() => {}}
+      onCreateCollection={() => {}}
+      onRenameCollection={async () => {}}
+      onDeleteCollection={async () => {}}
+    />
+  </div>
+);

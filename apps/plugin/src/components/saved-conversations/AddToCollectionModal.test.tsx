@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { AddToCollectionModal } from './AddToCollectionModal';
 import type { Collection } from '../../evaluation/types';
 import type { EvaluationDataSource } from '../../evaluation/api';

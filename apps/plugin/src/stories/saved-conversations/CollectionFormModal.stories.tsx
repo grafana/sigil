@@ -1,26 +1,22 @@
-import React from 'react';
-import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { CollectionFormModal } from '../../components/saved-conversations/CollectionFormModal';
 
-const meta: Meta<typeof CollectionFormModal> = {
+export default {
   title: 'SavedConversations/CollectionFormModal',
   component: CollectionFormModal,
 };
-export default meta;
-type Story = StoryObj<typeof CollectionFormModal>;
 
-export const Default: Story = {
+export const Default = {
   args: {
     isOpen: true,
-    onSubmit: async (values) => { console.log('submit', values); },
+    onSubmit: async (values: { name: string; description?: string }) => { console.log('submit', values); },
     onClose: () => {},
   },
 };
 
-export const Submitting: Story = {
+export const Submitting = {
   args: {
     isOpen: true,
-    onSubmit: () => new Promise(() => {}),
+    onSubmit: () => new Promise<void>(() => {}),
     onClose: () => {},
   },
 };

@@ -15,6 +15,9 @@ const mockSavedConversations: SavedConversation[] = [
     saved_by: 'operator-jane',
     created_at: '2026-03-01T10:00:00Z',
     updated_at: '2026-03-01T10:00:00Z',
+    generation_count: 0,
+    total_tokens: 0,
+    agent_names: [],
   },
   {
     tenant_id: 'tenant-1',
@@ -26,6 +29,9 @@ const mockSavedConversations: SavedConversation[] = [
     saved_by: 'operator-jane',
     created_at: '2026-03-02T14:30:00Z',
     updated_at: '2026-03-02T14:30:00Z',
+    generation_count: 0,
+    total_tokens: 0,
+    agent_names: [],
   },
 ];
 

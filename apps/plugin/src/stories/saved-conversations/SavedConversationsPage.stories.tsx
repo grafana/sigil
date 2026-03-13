@@ -1,5 +1,4 @@
 import React from 'react';
-import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { MemoryRouter } from 'react-router-dom';
 import SavedConversationsPage from '../../pages/SavedConversationsPage';
 import type { EvaluationDataSource } from '../../evaluation/api';
@@ -48,19 +47,17 @@ const dataSource: Partial<EvaluationDataSource> = {
   removeCollectionMember: async () => {},
 };
 
-const meta: Meta<typeof SavedConversationsPage> = {
+export default {
   title: 'SavedConversations/SavedConversationsPage',
   component: SavedConversationsPage,
   decorators: [(Story: React.ComponentType) => <MemoryRouter><Story /></MemoryRouter>],
 };
-export default meta;
-type Story = StoryObj<typeof SavedConversationsPage>;
 
-export const Default: Story = {
+export const Default = {
   args: { dataSource: dataSource as EvaluationDataSource },
 };
 
-export const Empty: Story = {
+export const Empty = {
   args: {
     dataSource: {
       ...dataSource,

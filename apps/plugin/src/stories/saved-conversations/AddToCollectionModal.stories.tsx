@@ -1,5 +1,3 @@
-import React from 'react';
-import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { AddToCollectionModal } from '../../components/saved-conversations/AddToCollectionModal';
 import type { Collection } from '../../evaluation/types';
 
@@ -17,24 +15,17 @@ const collections: Collection[] = [
 ];
 
 const dataSource = {
-  listCollectionsForSavedConversation: async (id: string) => ({
-    items: id === 's1' ? [collections[0]] : [],
-    next_cursor: '',
-  }),
   addCollectionMembers: async () => {},
-  removeCollectionMember: async () => {},
   createCollection: async (req: { name: string; description?: string; created_by: string }) =>
     makeCollection(`col-new-${Date.now()}`, req.name, 0),
 };
 
-const meta: Meta<typeof AddToCollectionModal> = {
+export default {
   title: 'SavedConversations/AddToCollectionModal',
   component: AddToCollectionModal,
 };
-export default meta;
-type Story = StoryObj<typeof AddToCollectionModal>;
 
-export const SingleSelection: Story = {
+export const SingleSelection = {
   args: {
     isOpen: true,
     selectedSavedIDs: ['s1'],
@@ -46,7 +37,7 @@ export const SingleSelection: Story = {
   },
 };
 
-export const MultipleSelections: Story = {
+export const MultipleSelections = {
   args: {
     ...SingleSelection.args,
     selectedSavedIDs: ['s1', 's2', 's3'],

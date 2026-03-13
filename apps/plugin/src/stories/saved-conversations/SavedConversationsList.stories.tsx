@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { SavedConversationsList } from '../../components/saved-conversations/SavedConversationsList';
 import type { SavedConversation } from '../../evaluation/types';
 
@@ -16,82 +15,102 @@ const conversations = [
   makeSC('s3', 'Multi-turn hallucination'),
 ];
 
-const meta: Meta<typeof SavedConversationsList> = {
+export default {
   title: 'SavedConversations/SavedConversationsList',
   component: SavedConversationsList,
 };
-export default meta;
-type Story = StoryObj<typeof SavedConversationsList>;
 
-export const Default: Story = {
-  render: () => {
-    const [selected, setSelected] = useState(new Set<string>());
-    const [query, setQuery] = useState('');
-    return (
-      <div style={{ height: 500, display: 'flex', flexDirection: 'column' }}>
-        <SavedConversationsList
-          conversations={conversations}
-          isLoading={false}
-          selectedIDs={selected}
-          onSelectionChange={setSelected}
-          activeCollectionID={null}
-          onAddToCollection={() => console.log('add to collection')}
-          onRemoveFromCollection={() => {}}
-          hasNextPage={false}
-          hasPrevPage={false}
-          onPageChange={() => {}}
-          searchQuery={query}
-          onSearchChange={setQuery}
-        />
-      </div>
-    );
-  },
+export const Default = () => {
+  const [selected, setSelected] = useState(new Set<string>());
+  const [query, setQuery] = useState('');
+  return (
+    <div style={{ height: 500, display: 'flex', flexDirection: 'column' }}>
+      <SavedConversationsList
+        conversations={conversations}
+        isLoading={false}
+        selectedIDs={selected}
+        onSelectionChange={setSelected}
+        activeCollectionID={null}
+        onAddToCollection={() => {}}
+        onRemoveFromCollection={() => {}}
+        onUnsave={() => {}}
+        hasNextPage={false}
+        hasPrevPage={false}
+        onPageChange={() => {}}
+        pageSize={25}
+        onPageSizeChange={() => {}}
+        searchQuery={query}
+        onSearchChange={setQuery}
+      />
+    </div>
+  );
 };
 
-export const WithActiveCollection: Story = {
-  render: () => {
-    const [selected, setSelected] = useState(new Set<string>(['s1']));
-    return (
-      <div style={{ height: 500, display: 'flex', flexDirection: 'column' }}>
-        <SavedConversationsList
-          conversations={conversations}
-          isLoading={false}
-          selectedIDs={selected}
-          onSelectionChange={setSelected}
-          activeCollectionID="col-1"
-          onAddToCollection={() => {}}
-          onRemoveFromCollection={(ids) => console.log('remove', [...ids])}
-          hasNextPage
-          hasPrevPage={false}
-          onPageChange={() => {}}
-          searchQuery=""
-          onSearchChange={() => {}}
-        />
-      </div>
-    );
-  },
+export const WithActiveCollection = () => {
+  const [selected, setSelected] = useState(new Set<string>(['s1']));
+  return (
+    <div style={{ height: 500, display: 'flex', flexDirection: 'column' }}>
+      <SavedConversationsList
+        conversations={conversations}
+        isLoading={false}
+        selectedIDs={selected}
+        onSelectionChange={setSelected}
+        activeCollectionID="col-1"
+        onAddToCollection={() => {}}
+        onRemoveFromCollection={(ids) => console.log('remove', [...ids])}
+        onUnsave={(ids) => console.log('unsave', [...ids])}
+        hasNextPage
+        hasPrevPage={false}
+        onPageChange={() => {}}
+        pageSize={25}
+        onPageSizeChange={() => {}}
+        searchQuery=""
+        onSearchChange={() => {}}
+      />
+    </div>
+  );
 };
 
-export const Loading: Story = {
-  args: {
-    conversations: [],
-    isLoading: true,
-    selectedIDs: new Set(),
-    onSelectionChange: () => {},
-    activeCollectionID: null,
-    onAddToCollection: () => {},
-    onRemoveFromCollection: () => {},
-    hasNextPage: false,
-    hasPrevPage: false,
-    onPageChange: () => {},
-    searchQuery: '',
-    onSearchChange: () => {},
-  },
-};
+export const Loading = () => (
+  <div style={{ height: 500, display: 'flex', flexDirection: 'column' }}>
+    <SavedConversationsList
+      conversations={[]}
+      isLoading
+      selectedIDs={new Set()}
+      onSelectionChange={() => {}}
+      activeCollectionID={null}
+      onAddToCollection={() => {}}
+      onRemoveFromCollection={() => {}}
+      onUnsave={() => {}}
+      hasNextPage={false}
+      hasPrevPage={false}
+      onPageChange={() => {}}
+      pageSize={25}
+      onPageSizeChange={() => {}}
+      searchQuery=""
+      onSearchChange={() => {}}
+    />
+  </div>
+);
 
-export const Empty: Story = {
-  args: {
-    ...Loading.args,
-    isLoading: false,
-  },
-};
+export const Empty = () => (
+  <div style={{ height: 500, display: 'flex', flexDirection: 'column' }}>
+    <SavedConversationsList
+      conversations={[]}
+      isLoading={false}
+      selectedIDs={new Set()}
+      onSelectionChange={() => {}}
+      activeCollectionID={null}
+      onAddToCollection={() => {}}
+      onRemoveFromCollection={() => {}}
+      onUnsave={() => {}}
+      hasNextPage={false}
+      hasPrevPage={false}
+      onPageChange={() => {}}
+      pageSize={25}
+      onPageSizeChange={() => {}}
+      searchQuery=""
+      onSearchChange={() => {}}
+    />
+  </div>
+);
