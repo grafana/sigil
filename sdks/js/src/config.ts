@@ -158,6 +158,28 @@ function resolveHeadersWithAuth(
     };
   }
 
+  if (mode === 'basic') {
+    const password = auth.basicPassword?.trim() ?? '';
+    if (password.length === 0) {
+      throw new Error(`${label} auth mode "basic" requires basicPassword`);
+    }
+    let user = auth.basicUser?.trim() ?? '';
+    if (user.length === 0) {
+      user = tenantId;
+    }
+    if (user.length === 0) {
+      throw new Error(`${label} auth mode "basic" requires basicUser or tenantId`);
+    }
+    const result: Record<string, string> = { ...(out ?? {}) };
+    if (!hasHeaderKey(result, authorizationHeaderName)) {
+      result[authorizationHeaderName] = 'Basic ' + btoa(`${user}:${password}`);
+    }
+    if (tenantId.length > 0 && !hasHeaderKey(result, tenantHeaderName)) {
+      result[tenantHeaderName] = tenantId;
+    }
+    return result;
+  }
+
   throw new Error(`unsupported ${label} auth mode: ${auth.mode}`);
 }
 

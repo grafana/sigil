@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import logging
@@ -25,6 +26,8 @@ class AuthConfig:
     mode: str = "none"
     tenant_id: str = ""
     bearer_token: str = ""
+    basic_user: str = ""
+    basic_password: str = ""
 
 
 @dataclass(slots=True)
@@ -157,6 +160,21 @@ def _resolve_export_headers(headers: dict[str, str], auth: AuthConfig, label: st
             raise ValueError(f"{label} auth mode 'bearer' does not allow tenant_id")
         if not _has_header(out, AUTHORIZATION_HEADER):
             out[AUTHORIZATION_HEADER] = _format_bearer_token(bearer_token)
+        return out
+    if mode == "basic":
+        password = auth.basic_password.strip()
+        if not password:
+            raise ValueError(f"{label} auth mode 'basic' requires basic_password")
+        user = auth.basic_user.strip()
+        if not user:
+            user = tenant_id
+        if not user:
+            raise ValueError(f"{label} auth mode 'basic' requires basic_user or tenant_id")
+        if not _has_header(out, AUTHORIZATION_HEADER):
+            creds = base64.b64encode(f"{user}:{password}".encode()).decode()
+            out[AUTHORIZATION_HEADER] = f"Basic {creds}"
+        if tenant_id and not _has_header(out, TENANT_HEADER):
+            out[TENANT_HEADER] = tenant_id
         return out
 
     raise ValueError(f"unsupported {label} auth mode {auth.mode!r}")
