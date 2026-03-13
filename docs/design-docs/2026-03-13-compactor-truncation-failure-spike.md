@@ -61,7 +61,7 @@ Grafana Assistant reported:
 Grafana Assistant deployment metadata reported:
 
 - active compactor image tag:
-  `ghcr.io/grafana/sigil:d580d1ef51c2593bc7a5aa140ebc6283ae690a72`
+  `ghcr.io/grafana/sigil:d580d1ef51c2593bc7a5aa140ebc6283ae690a72` <!-- trufflehog:ignore -->
 - compactor rollout time: 2026-03-12 20:14:38 UTC
 
 Local git verification confirmed that deployed commit
