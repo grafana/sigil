@@ -151,7 +151,7 @@ export default function DashboardPage({ dataSource = defaultDashboardDataSource 
         <DashboardToolsGrid
           dataSource={dataSource}
           filters={filters}
-          breakdownBy={breakdownBy}
+          breakdownBy={effectiveBreakdownBy}
           from={from}
           to={to}
           timeRange={timeRange}
