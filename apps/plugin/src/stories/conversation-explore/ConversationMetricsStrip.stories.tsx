@@ -3,6 +3,7 @@ import ConversationMetricsStrip from '../../components/conversation-explore/Conv
 import { mockGenerations, mockFlowNodes, mockGenerationCosts } from './fixtures';
 import type { GenerationDetail, GenerationCostResult } from '../../generation/types';
 import type { FlowNode } from '../../components/conversation-explore/types';
+import { toNum } from '../../conversation/aggregates';
 
 const meta = {
   title: 'Sigil/Conversation Explore/ConversationMetricsStrip',
@@ -70,7 +71,7 @@ const manyFlowNodes: FlowNode[] = manyGenerations.map((gen, i) => ({
   status: 'success' as const,
   model: gen.model?.name,
   provider: gen.model?.provider,
-  tokenCount: (gen.usage?.input_tokens ?? 0) + (gen.usage?.output_tokens ?? 0),
+  tokenCount: toNum(gen.usage?.input_tokens) + toNum(gen.usage?.output_tokens),
   generation: gen,
   children: [],
 }));

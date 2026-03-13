@@ -1,12 +1,13 @@
 import type { ModelCardClient } from '../modelcard/api';
 import type { ModelCard, ModelCardPricing } from '../modelcard/types';
 import type { GenerationCostBreakdown, GenerationCostResult, GenerationDetail, GenerationUsage } from './types';
+import { toNum } from '../conversation/aggregates';
 
 export function calculateGenerationCost(usage: GenerationUsage, pricing: ModelCardPricing): GenerationCostBreakdown {
-  const inputCost = (usage.input_tokens ?? 0) * (pricing.prompt_usd_per_token ?? 0);
-  const outputCost = (usage.output_tokens ?? 0) * (pricing.completion_usd_per_token ?? 0);
-  const cacheReadCost = (usage.cache_read_input_tokens ?? 0) * (pricing.input_cache_read_usd_per_token ?? 0);
-  const cacheWriteCost = (usage.cache_write_input_tokens ?? 0) * (pricing.input_cache_write_usd_per_token ?? 0);
+  const inputCost = toNum(usage.input_tokens) * toNum(pricing.prompt_usd_per_token);
+  const outputCost = toNum(usage.output_tokens) * toNum(pricing.completion_usd_per_token);
+  const cacheReadCost = toNum(usage.cache_read_input_tokens) * toNum(pricing.input_cache_read_usd_per_token);
+  const cacheWriteCost = toNum(usage.cache_write_input_tokens) * toNum(pricing.input_cache_write_usd_per_token);
   return {
     inputCost,
     outputCost,
