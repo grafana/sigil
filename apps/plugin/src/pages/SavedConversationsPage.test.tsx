@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import SavedConversationsPage from './SavedConversationsPage';
 import type { EvaluationDataSource } from '../evaluation/api';
@@ -70,6 +70,50 @@ describe('SavedConversationsPage', () => {
     await waitFor(() => {
       expect(ds.listCollectionMembers).toHaveBeenCalledWith('col-1', 25, undefined);
     });
+  });
+
+  it('computes All saved total across pages when total_count is missing', async () => {
+    const listSavedConversations = jest.fn(async (_query?: string, _limit?: number, cursor?: string): Promise<SavedConversationListResponse> => {
+      if (cursor === 'page-2') {
+        return {
+          items: [makeSC('s3', 'Third item')],
+          next_cursor: '',
+        };
+      }
+      return {
+        items: [makeSC('s1', 'Auth flow edge case'), makeSC('s2', 'Rate limiting test')],
+        next_cursor: 'page-2',
+      };
+    });
+    const ds = buildDataSource({ listSavedConversations });
+    render(
+      <MemoryRouter>
+        <SavedConversationsPage dataSource={ds} />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(listSavedConversations).toHaveBeenCalledWith(undefined, 25, 'page-2'));
+    const allSavedRow = screen.getByText('All saved').closest('div');
+    expect(allSavedRow).not.toBeNull();
+    expect(within(allSavedRow as HTMLElement).getByText('3')).toBeInTheDocument();
+  });
+
+  it('reloads conversations when page size changes', async () => {
+    const listSavedConversations = jest.fn(async (): Promise<SavedConversationListResponse> => ({
+      items: [makeSC('s1', 'Auth flow edge case'), makeSC('s2', 'Rate limiting test')],
+      next_cursor: '',
+      total_count: 2,
+    }));
+    const ds = buildDataSource({ listSavedConversations });
+    render(
+      <MemoryRouter>
+        <SavedConversationsPage dataSource={ds} />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(listSavedConversations).toHaveBeenCalledWith(undefined, 25, undefined));
+    fireEvent.change(screen.getByDisplayValue('25'), { target: { value: '50' } });
+    await waitFor(() => expect(listSavedConversations).toHaveBeenCalledWith(undefined, 50, undefined));
   });
 
   it('shows error alert when listSavedConversations fails', async () => {
@@ -152,6 +196,45 @@ describe('SavedConversationsPage', () => {
     fireEvent.click(screen.getByText(/remove from collection/i));
     await waitFor(() => {
       expect(ds.removeCollectionMember).toHaveBeenCalledWith('col-1', 's1');
+    });
+  });
+
+  it('keeps optimistic All saved count after unsave refresh returns stale total_count', async () => {
+    let loadCount = 0;
+    const listSavedConversations = jest.fn(async (): Promise<SavedConversationListResponse> => {
+      loadCount += 1;
+      if (loadCount === 1) {
+        return {
+          items: [makeSC('s1', 'Auth flow edge case'), makeSC('s2', 'Rate limiting test')],
+          next_cursor: '',
+          total_count: 5,
+        };
+      }
+      return {
+        items: [makeSC('s2', 'Rate limiting test')],
+        next_cursor: '',
+        total_count: 5,
+      };
+    });
+    const ds = buildDataSource({ listSavedConversations });
+    render(
+      <MemoryRouter>
+        <SavedConversationsPage dataSource={ds} />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => screen.getByText('Auth flow edge case'));
+    expect(within(screen.getByText('All saved').closest('div') as HTMLElement).getByText('5')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Select Auth flow edge case'));
+    await waitFor(() => screen.getByText(/^unsave$/i));
+    fireEvent.click(screen.getByText(/^unsave$/i));
+    await waitFor(() => screen.getAllByText(/^unsave$/i).length > 1);
+    fireEvent.click(screen.getAllByText(/^unsave$/i)[1]);
+
+    await waitFor(() => expect(ds.deleteSavedConversation).toHaveBeenCalledWith('s1'));
+    await waitFor(() => {
+      expect(within(screen.getByText('All saved').closest('div') as HTMLElement).getByText('4')).toBeInTheDocument();
     });
   });
 });

@@ -3,7 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Alert, useStyles2 } from '@grafana/ui';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../evaluation/api';
-import type { Collection, SavedConversation } from '../evaluation/types';
+import type { Collection, SavedConversation, SavedConversationListResponse } from '../evaluation/types';
 import { CollectionsSidebar } from '../components/saved-conversations/CollectionsSidebar';
 import { SavedConversationsList } from '../components/saved-conversations/SavedConversationsList';
 import { AddToCollectionModal } from '../components/saved-conversations/AddToCollectionModal';
@@ -21,6 +21,21 @@ async function fetchAllCollections(
     cursor = resp.next_cursor || undefined;
   } while (cursor && all.length < max);
   return all.slice(0, max);
+}
+
+async function fetchSavedConversationTotal(
+  dataSource: Pick<EvaluationDataSource, 'listSavedConversations'>,
+  firstPage: SavedConversationListResponse,
+  pageSize: number
+): Promise<number> {
+  let total = firstPage.items.length;
+  let cursor = firstPage.next_cursor || undefined;
+  while (cursor) {
+    const resp = await dataSource.listSavedConversations(undefined, pageSize, cursor);
+    total += resp.items.length;
+    cursor = resp.next_cursor || undefined;
+  }
+  return total;
 }
 
 export type SavedConversationsPageProps = {
@@ -119,7 +134,7 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
   }, [dataSource]);
 
   // Load conversations whenever active collection changes
-  const loadConversations = useCallback(async (cursor?: string) => {
+  const loadConversations = useCallback(async (cursor?: string, options?: { preserveAllSavedCount?: boolean }) => {
     setCurrentCursor(cursor);
     setIsLoading(true);
     setError(undefined);
@@ -128,9 +143,16 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
         const resp = await dataSource.listSavedConversations(undefined, pageSize, cursor);
         setConversations(resp.items);
         setNextCursor(resp.next_cursor || undefined);
-        const trueTotal = resp.total_count ?? resp.items.length;
-        setAllSavedCount(trueTotal);
-        setAllSavedTotal(resp.total_count);
+        if (!options?.preserveAllSavedCount) {
+          if (resp.total_count !== undefined) {
+            setAllSavedCount(resp.total_count);
+            setAllSavedTotal(resp.total_count);
+          } else if (cursor === undefined) {
+            const total = await fetchSavedConversationTotal(dataSource, resp, pageSize);
+            setAllSavedCount(total);
+            setAllSavedTotal(total);
+          }
+        }
       } else {
         const resp = await dataSource.listCollectionMembers(activeCollectionID, pageSize, cursor);
         setConversations(resp.items);
@@ -185,6 +207,7 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
       await Promise.all([...ids].map((id) => dataSource.deleteSavedConversation(id)));
       setSelectedIDs(new Set());
       setAllSavedCount((prev) => Math.max(0, prev - ids.size));
+      setAllSavedTotal((prev) => prev === undefined ? prev : Math.max(0, prev - ids.size));
       if (activeCollectionID) {
         setCollections((prev) =>
           prev.map((c) => c.collection_id === activeCollectionID
@@ -193,7 +216,7 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
           )
         );
       }
-      await loadConversations();
+      await loadConversations(undefined, { preserveAllSavedCount: activeCollectionID === null });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to unsave conversations');
     }
