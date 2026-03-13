@@ -1,9 +1,12 @@
 package compactor
 
 import (
+	"bytes"
 	"context"
+	"database/sql/driver"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -179,6 +182,7 @@ func TestTruncateOwnedShardRetriesRetryableLockErrorsWithBackoff(t *testing.T) {
 	retryBefore := testutil.ToFloat64(compactorTruncateDeadlocksTotal.WithLabelValues("retry"))
 	recoveredBefore := testutil.ToFloat64(compactorTruncateDeadlocksTotal.WithLabelValues("recovered"))
 	exhaustedBefore := testutil.ToFloat64(compactorTruncateDeadlocksTotal.WithLabelValues("exhausted"))
+	failureBefore := testutil.ToFloat64(compactorTruncateFailuresTotal.WithLabelValues(string(mysql.ErrorClassRetryableLock)))
 
 	truncator := &sequenceTruncator{
 		responses: []truncateResponse{
@@ -231,6 +235,135 @@ func TestTruncateOwnedShardRetriesRetryableLockErrorsWithBackoff(t *testing.T) {
 	}
 	if got := testutil.ToFloat64(compactorTruncateDeadlocksTotal.WithLabelValues("exhausted")) - exhaustedBefore; got != 0 {
 		t.Fatalf("exhausted metric increment=%v, want 0", got)
+	}
+	if got := testutil.ToFloat64(compactorTruncateFailuresTotal.WithLabelValues(string(mysql.ErrorClassRetryableLock))) - failureBefore; got != 0 {
+		t.Fatalf("truncate failure metric increment=%v, want 0", got)
+	}
+}
+
+func TestTruncateOwnedShardRetriesRetryableConnectionErrorsWithBackoff(t *testing.T) {
+	retryBefore := testutil.ToFloat64(compactorTruncateDeadlocksTotal.WithLabelValues("retry"))
+	recoveredBefore := testutil.ToFloat64(compactorTruncateDeadlocksTotal.WithLabelValues("recovered"))
+	exhaustedBefore := testutil.ToFloat64(compactorTruncateDeadlocksTotal.WithLabelValues("exhausted"))
+	failureBefore := testutil.ToFloat64(compactorTruncateFailuresTotal.WithLabelValues(string(mysql.ErrorClassRetryableConnection)))
+
+	truncator := &sequenceTruncator{
+		responses: []truncateResponse{
+			{err: driver.ErrBadConn},
+			{err: driver.ErrBadConn},
+			{deleted: 2},
+			{deleted: 0},
+		},
+	}
+	var slept []time.Duration
+	service := &Service{
+		cfg: config.CompactorConfig{
+			BatchSize:          8,
+			LeaseTTL:           30 * time.Second,
+			ShardCount:         1,
+			ShardWindowSeconds: 60,
+		},
+		logger:    log.NewNopLogger(),
+		truncator: truncator,
+		sleepFn: func(_ context.Context, d time.Duration) error {
+			slept = append(slept, d)
+			return nil
+		},
+	}
+
+	err := service.truncateOwnedShard(
+		context.Background(),
+		storage.TenantShard{TenantID: "tenant-a", ShardID: 0},
+		time.Now().UTC().Add(-time.Hour),
+		time.Now().Add(time.Minute),
+		time.Now().Add(time.Hour),
+		time.Hour,
+	)
+	if err != nil {
+		t.Fatalf("truncate owned shard: %v", err)
+	}
+
+	if got, want := truncator.limits, []int{8, 4, 2, 8}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("truncate limits=%v, want %v", got, want)
+	}
+	if got, want := slept, []time.Duration{truncateInitialRetryBackoff, truncateInitialRetryBackoff * 2}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("sleep backoff=%v, want %v", got, want)
+	}
+
+	if got := testutil.ToFloat64(compactorTruncateDeadlocksTotal.WithLabelValues("retry")) - retryBefore; got != 0 {
+		t.Fatalf("deadlock retry metric increment=%v, want 0", got)
+	}
+	if got := testutil.ToFloat64(compactorTruncateDeadlocksTotal.WithLabelValues("recovered")) - recoveredBefore; got != 0 {
+		t.Fatalf("deadlock recovered metric increment=%v, want 0", got)
+	}
+	if got := testutil.ToFloat64(compactorTruncateDeadlocksTotal.WithLabelValues("exhausted")) - exhaustedBefore; got != 0 {
+		t.Fatalf("deadlock exhausted metric increment=%v, want 0", got)
+	}
+	if got := testutil.ToFloat64(compactorTruncateFailuresTotal.WithLabelValues(string(mysql.ErrorClassRetryableConnection))) - failureBefore; got != 0 {
+		t.Fatalf("truncate failure metric increment=%v, want 0", got)
+	}
+}
+
+func TestRunShardWorkersLogsTruncateFailureDetailsAndCountsClass(t *testing.T) {
+	failureBefore := testutil.ToFloat64(compactorTruncateFailuresTotal.WithLabelValues(string(mysql.ErrorClassNonRetryableSQL)))
+
+	truncator := &sequenceTruncator{
+		responses: []truncateResponse{
+			{
+				err: &mysqlDriver.MySQLError{
+					Number:   1064,
+					SQLState: [5]byte{'4', '2', '0', '0', '0'},
+					Message:  "You have an error in your SQL syntax",
+				},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	service := &Service{
+		cfg: config.CompactorConfig{
+			BatchSize:          8,
+			LeaseTTL:           30 * time.Second,
+			ShardCount:         1,
+			ShardWindowSeconds: 60,
+		},
+		logger:    log.NewLogfmtLogger(&buf),
+		truncator: truncator,
+	}
+
+	err := service.runShardWorkers(context.Background(), []storage.TenantShard{{TenantID: "tenant-a", ShardID: 0}}, func(ctx context.Context, shard storage.TenantShard) error {
+		return service.truncateOwnedShard(
+			ctx,
+			shard,
+			time.Now().UTC().Add(-time.Hour),
+			time.Now().Add(time.Minute),
+			time.Now().Add(time.Hour),
+			time.Hour,
+		)
+	})
+	if err == nil {
+		t.Fatal("expected truncate worker error")
+	}
+
+	if got, want := truncator.limits, []int{8}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("truncate limits=%v, want %v", got, want)
+	}
+
+	logOutput := buf.String()
+	for _, want := range []string{
+		"msg=\"compactor worker shard failed\"",
+		"truncate_failure_class=non_retryable_sql",
+		"truncate_failure_retryable=false",
+		"truncate_failure_errno=1064",
+		"truncate_failure_sqlstate=42000",
+		"truncate_failure_message=\"You have an error in your SQL syntax\"",
+	} {
+		if !strings.Contains(logOutput, want) {
+			t.Fatalf("log output missing %q: %s", want, logOutput)
+		}
+	}
+
+	if got := testutil.ToFloat64(compactorTruncateFailuresTotal.WithLabelValues(string(mysql.ErrorClassNonRetryableSQL))) - failureBefore; got != 1 {
+		t.Fatalf("truncate failure metric increment=%v, want 1", got)
 	}
 }
 

@@ -25,6 +25,10 @@ var (
 		Name: "sigil_compactor_truncated_total",
 		Help: "Total number of compacted rows truncated from hot storage.",
 	})
+	compactorTruncateFailuresTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "sigil_compactor_truncate_failures_total",
+		Help: "Total number of terminal compactor truncation failures partitioned by coarse class.",
+	}, []string{"class"})
 	compactorTruncateDeadlocksTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "sigil_compactor_truncate_deadlocks_total",
 		Help: "Total number of retryable MySQL lock errors encountered during compactor truncation, partitioned by outcome.",
@@ -112,6 +116,13 @@ func observeTruncated(count int64) {
 
 func observeTruncateDeadlock(status string) {
 	compactorTruncateDeadlocksTotal.WithLabelValues(status).Inc()
+}
+
+func observeTruncateFailure(class string) {
+	if class == "" {
+		class = "unknown"
+	}
+	compactorTruncateFailuresTotal.WithLabelValues(class).Inc()
 }
 
 func setLeaseMetric(tenantID string, shardID int, held bool) {
