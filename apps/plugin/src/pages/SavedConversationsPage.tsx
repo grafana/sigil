@@ -72,7 +72,9 @@ const getStyles = (theme: GrafanaTheme2) => ({
   }),
 });
 
-export default function SavedConversationsPage({ dataSource = defaultEvaluationDataSource }: SavedConversationsPageProps) {
+export default function SavedConversationsPage({
+  dataSource = defaultEvaluationDataSource,
+}: SavedConversationsPageProps) {
   const styles = useStyles2(getStyles);
   const [sidebarWidth, setSidebarWidth] = useState(200);
   const isDragging = useRef(false);
@@ -83,7 +85,9 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
     const startX = e.clientX;
     const startWidth = sidebarWidth;
     const onMouseMove = (ev: MouseEvent) => {
-      if (!isDragging.current) { return; }
+      if (!isDragging.current) {
+        return;
+      }
       setSidebarWidth(Math.max(140, Math.min(400, startWidth + ev.clientX - startX)));
     };
     const onMouseUp = () => {
@@ -119,29 +123,32 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
   }, [dataSource]);
 
   // Load conversations whenever active collection changes
-  const loadConversations = useCallback(async (cursor?: string) => {
-    setCurrentCursor(cursor);
-    setIsLoading(true);
-    setError(undefined);
-    try {
-      if (activeCollectionID === null) {
-        const resp = await dataSource.listSavedConversations(undefined, pageSize, cursor);
-        setConversations(resp.items);
-        setNextCursor(resp.next_cursor || undefined);
-        const trueTotal = resp.total_count ?? resp.items.length;
-        setAllSavedCount(trueTotal);
-        setAllSavedTotal(resp.total_count);
-      } else {
-        const resp = await dataSource.listCollectionMembers(activeCollectionID, pageSize, cursor);
-        setConversations(resp.items);
-        setNextCursor(resp.next_cursor || undefined);
+  const loadConversations = useCallback(
+    async (cursor?: string) => {
+      setCurrentCursor(cursor);
+      setIsLoading(true);
+      setError(undefined);
+      try {
+        if (activeCollectionID === null) {
+          const resp = await dataSource.listSavedConversations(undefined, pageSize, cursor);
+          setConversations(resp.items);
+          setNextCursor(resp.next_cursor || undefined);
+          const trueTotal = resp.total_count ?? resp.items.length;
+          setAllSavedCount(trueTotal);
+          setAllSavedTotal(resp.total_count);
+        } else {
+          const resp = await dataSource.listCollectionMembers(activeCollectionID, pageSize, cursor);
+          setConversations(resp.items);
+          setNextCursor(resp.next_cursor || undefined);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load conversations');
+      } finally {
+        setIsLoading(false);
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load conversations');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [dataSource, activeCollectionID, pageSize]);
+    },
+    [dataSource, activeCollectionID, pageSize]
+  );
 
   // Reset selection/search/pagination only when the active collection changes
   useEffect(() => {
@@ -160,7 +167,11 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
   };
 
   const handleCreateCollection = async (values: { name: string; description?: string }) => {
-    const created = await dataSource.createCollection({ name: values.name, description: values.description, created_by: 'user' });
+    const created = await dataSource.createCollection({
+      name: values.name,
+      description: values.description,
+      created_by: 'user',
+    });
     setCollections((prev) => [...prev, created]);
     setActiveCollectionID(created.collection_id);
     setShowCreateModal(false);
@@ -168,7 +179,7 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
 
   const handleRenameCollection = async (id: string, name: string) => {
     const updated = await dataSource.updateCollection(id, { name, updated_by: 'user' });
-    setCollections((prev) => prev.map((c) => c.collection_id === id ? { ...c, name: updated.name } : c));
+    setCollections((prev) => prev.map((c) => (c.collection_id === id ? { ...c, name: updated.name } : c)));
   };
 
   const handleDeleteCollection = async (id: string) => {
@@ -183,6 +194,20 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
     setError(undefined);
     try {
       await Promise.all([...ids].map((id) => dataSource.deleteSavedConversation(id)));
+      const deletedCount = ids.size;
+      if (deletedCount > 0) {
+        setAllSavedCount((prev) => Math.max(0, prev - deletedCount));
+        setAllSavedTotal((prev) => (prev === undefined ? prev : Math.max(0, prev - deletedCount)));
+        if (activeCollectionID !== null) {
+          setCollections((prev) =>
+            prev.map((c) =>
+              c.collection_id === activeCollectionID
+                ? { ...c, member_count: Math.max(0, c.member_count - deletedCount) }
+                : c
+            )
+          );
+        }
+      }
       setSelectedIDs(new Set());
       await loadConversations();
     } catch (e) {
@@ -200,9 +225,8 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
       setSelectedIDs(new Set());
       await loadConversations();
       setCollections((prev) =>
-        prev.map((c) => c.collection_id === activeCollectionID
-          ? { ...c, member_count: Math.max(0, c.member_count - ids.size) }
-          : c
+        prev.map((c) =>
+          c.collection_id === activeCollectionID ? { ...c, member_count: Math.max(0, c.member_count - ids.size) } : c
         )
       );
     } catch (e) {
@@ -281,7 +305,11 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
           onPageSizeChange={handlePageSizeChange}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          totalCount={activeCollectionID === null ? allSavedTotal : collections.find((c) => c.collection_id === activeCollectionID)?.member_count}
+          totalCount={
+            activeCollectionID === null
+              ? allSavedTotal
+              : collections.find((c) => c.collection_id === activeCollectionID)?.member_count
+          }
         />
       </div>
       <AddToCollectionModal
