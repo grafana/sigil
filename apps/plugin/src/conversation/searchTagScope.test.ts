@@ -2,10 +2,8 @@ import { buildConversationTagDiscoveryQuery } from './searchTagScope';
 import type { DashboardFilters } from '../dashboard/types';
 
 describe('buildConversationTagDiscoveryQuery', () => {
-  it('scopes discovery to conversation generation and tool-use spans', () => {
-    expect(buildConversationTagDiscoveryQuery()).toBe(
-      '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" }'
-    );
+  it('scopes discovery to any conversation span with a non-empty operation name', () => {
+    expect(buildConversationTagDiscoveryQuery()).toBe('{ span.gen_ai.operation.name =~ ".+" }');
   });
 
   it('adds current conversation filters to the discovery query', () => {
@@ -17,7 +15,7 @@ describe('buildConversationTagDiscoveryQuery', () => {
     };
 
     expect(buildConversationTagDiscoveryQuery(filters)).toBe(
-      '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && span.gen_ai.provider.name = "openai" && span.gen_ai.request.model = "gpt-4o" && span.gen_ai.agent.name = "assistant" && resource.k8s.namespace.name = "prod" }'
+      '{ span.gen_ai.operation.name =~ ".+" && span.gen_ai.provider.name = "openai" && span.gen_ai.request.model = "gpt-4o" && span.gen_ai.agent.name = "assistant" && resource.k8s.namespace.name = "prod" }'
     );
   });
 
@@ -35,7 +33,7 @@ describe('buildConversationTagDiscoveryQuery', () => {
     };
 
     expect(buildConversationTagDiscoveryQuery(filters)).toBe(
-      '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && span.http.status_code = "200" && span.enabled = "true" && span.port != "8080" && span.flag = "false" }'
+      '{ span.gen_ai.operation.name =~ ".+" && span.http.status_code = "200" && span.enabled = "true" && span.port != "8080" && span.flag = "false" }'
     );
   });
 });

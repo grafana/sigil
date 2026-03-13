@@ -547,7 +547,7 @@ describe('ConversationsBrowserPage', () => {
       'resource.k8s.namespace.name',
       expect.any(String),
       expect.any(String),
-      '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" }'
+      '{ span.gen_ai.operation.name =~ ".+" }'
     );
   });
 
@@ -557,19 +557,19 @@ describe('ConversationsBrowserPage', () => {
       async (tag: string, _from: string, _to: string, query?: string) => {
         if (tag === 'span.gen_ai.provider.name') {
           expect(query).toBe(
-            '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && resource.k8s.namespace.name = "prod" }'
+            '{ span.gen_ai.operation.name =~ ".+" && resource.k8s.namespace.name = "prod" }'
           );
           return ['openai'];
         }
         if (tag === 'span.gen_ai.request.model') {
           expect(query).toBe(
-            '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && resource.k8s.namespace.name = "prod" }'
+            '{ span.gen_ai.operation.name =~ ".+" && resource.k8s.namespace.name = "prod" }'
           );
           return ['gpt-4o'];
         }
         if (tag === 'span.gen_ai.agent.name') {
           expect(query).toBe(
-            '{ span.gen_ai.operation.name =~ "generateText|streamText|execute_tool" && resource.k8s.namespace.name = "prod" }'
+            '{ span.gen_ai.operation.name =~ ".+" && resource.k8s.namespace.name = "prod" }'
           );
           return ['assistant'];
         }
