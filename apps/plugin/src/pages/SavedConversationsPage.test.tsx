@@ -96,6 +96,26 @@ describe('SavedConversationsPage', () => {
     });
   });
 
+  it('returns to All saved after deleting the active collection', async () => {
+    const ds = buildDataSource();
+    render(
+      <MemoryRouter>
+        <SavedConversationsPage dataSource={ds} />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => screen.getByText('Regression tests'));
+    fireEvent.click(screen.getByText('Regression tests'));
+    await waitFor(() => expect(ds.listCollectionMembers).toHaveBeenCalledWith('col-1', 25, undefined));
+
+    fireEvent.click(screen.getByLabelText(/collection options/i));
+    fireEvent.click(screen.getByText(/^delete$/i));
+    fireEvent.click(screen.getByTestId('data-testid Confirm Modal Danger Button'));
+
+    await waitFor(() => expect(ds.deleteCollection).toHaveBeenCalledWith('col-1'));
+    await waitFor(() => expect(ds.listSavedConversations).toHaveBeenCalledTimes(2));
+  });
+
   it('shows error alert when listSavedConversations fails', async () => {
     const ds = buildDataSource({
       listSavedConversations: jest.fn(async () => {

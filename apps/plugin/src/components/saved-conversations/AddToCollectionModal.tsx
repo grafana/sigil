@@ -85,19 +85,14 @@ export function AddToCollectionModal({
   };
 
   const handleCreateCollection = async (values: { name: string; description?: string }) => {
-    try {
-      const created = await dataSource.createCollection({
-        name: values.name,
-        description: values.description,
-        created_by: 'user',
-      });
-      onCollectionCreated(created);
-      setShowCreateModal(false);
-      setSelectedCollectionIDs((prev) => [...prev, created.collection_id]);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create collection');
-      setShowCreateModal(false);
-    }
+    const created = await dataSource.createCollection({
+      name: values.name,
+      description: values.description,
+      created_by: 'user',
+    });
+    onCollectionCreated(created);
+    setShowCreateModal(false);
+    setSelectedCollectionIDs((prev) => [...prev, created.collection_id]);
   };
 
   const options = collections.map((c) => ({ label: c.name, value: c.collection_id }));

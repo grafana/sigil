@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AddToCollectionModal } from './AddToCollectionModal';
 import type { Collection } from '../../evaluation/types';
 import type { EvaluationDataSource } from '../../evaluation/api';
@@ -81,5 +81,33 @@ describe('AddToCollectionModal', () => {
       />
     );
     expect(screen.getByText(/create new collection/i)).toBeInTheDocument();
+  });
+
+  it('keeps create form open with input when create fails', async () => {
+    const ds = buildDataSource();
+    const createCollection = jest.fn(async () => {
+      throw new Error('create failed');
+    });
+
+    render(
+      <AddToCollectionModal
+        isOpen
+        selectedSavedIDs={['s1']}
+        collections={collections}
+        dataSource={{ ...ds, createCollection } as unknown as EvaluationDataSource}
+        onClose={onClose}
+        onSaved={onSaved}
+        onCollectionCreated={jest.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /create new collection/i }));
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Important collection' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await waitFor(() => expect(createCollection).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('create failed'));
+    expect(screen.getByDisplayValue('Important collection')).toBeInTheDocument();
+    expect(screen.getByText('New collection')).toBeInTheDocument();
   });
 });
