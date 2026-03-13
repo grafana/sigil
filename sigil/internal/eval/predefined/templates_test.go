@@ -139,3 +139,13 @@ func TestNumericJudgeTemplatesDeclareBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestTemplatesHaveUniqueEvaluatorIDs(t *testing.T) {
+	seen := make(map[string]struct{}, len(Templates()))
+	for _, template := range Templates() {
+		if _, exists := seen[template.EvaluatorID]; exists {
+			t.Fatalf("duplicate predefined evaluator id %q", template.EvaluatorID)
+		}
+		seen[template.EvaluatorID] = struct{}{}
+	}
+}
