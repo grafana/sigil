@@ -74,7 +74,7 @@ The recurring error rhythm is consistent with the default compactor truncation
 loop:
 
 - `SIGIL_COMPACTOR_TRUNCATE_INTERVAL` defaults to 5 minutes in
-  [sigil/internal/config/config.go](/Users/cyriltovena/code/symphony-workspaces/GRA-55/sigil/internal/config/config.go:24)
+  [sigil/internal/config/config.go](sigil/internal/config/config.go:24)
 - the ticket evidence and runtime findings both showed failures recurring about
   every 5 to 10 minutes
 
@@ -83,17 +83,17 @@ loop:
 The current failure signature maps to the truncation delete path introduced long
 before `GRA-31`:
 
-- [sigil/internal/storage/mysql/compaction.go](/Users/cyriltovena/code/symphony-workspaces/GRA-55/sigil/internal/storage/mysql/compaction.go:68)
+- [sigil/internal/storage/mysql/compaction.go](sigil/internal/storage/mysql/compaction.go:68)
   executes the `DELETE ... JOIN (...)` statement inside `WALStore.TruncateCompacted`.
-- [sigil/internal/storage/compactor/service.go](/Users/cyriltovena/code/symphony-workspaces/GRA-55/sigil/internal/storage/compactor/service.go:439)
+- [sigil/internal/storage/compactor/service.go](sigil/internal/storage/compactor/service.go:439)
   wraps that truncation call from `truncateOwnedShard`.
 
 `GRA-31` did not change the SQL statement itself. It added a compactor-level
 retry loop around the same callsite:
 
-- [sigil/internal/storage/compactor/service.go](/Users/cyriltovena/code/symphony-workspaces/GRA-55/sigil/internal/storage/compactor/service.go:450)
+- [sigil/internal/storage/compactor/service.go](sigil/internal/storage/compactor/service.go:450)
   retries truncation with exponential backoff and a halved batch size.
-- [sigil/internal/storage/mysql/retry.go](/Users/cyriltovena/code/symphony-workspaces/GRA-55/sigil/internal/storage/mysql/retry.go:64)
+- [sigil/internal/storage/mysql/retry.go](sigil/internal/storage/mysql/retry.go:64)
   defines which nested MySQL/network errors count as retryable.
 
 ## Classification
@@ -107,7 +107,7 @@ deadlock-hardening behavior.
 ### Why
 
 1. The observed failures still terminate at
-   [compaction.go](/Users/cyriltovena/code/symphony-workspaces/GRA-55/sigil/internal/storage/mysql/compaction.go:68),
+   [compaction.go](sigil/internal/storage/mysql/compaction.go:68),
    so there is overlap in code path.
 2. `GRA-31` specifically hardened retryable lock/deadlock handling after the
    storage-layer retry budget is exhausted, but the current evidence does not
@@ -118,7 +118,7 @@ deadlock-hardening behavior.
    to intermittent truncation failures rather than a permanent stall.
 5. The current logs are too truncated to prove that the root error matches one
    of the retryable classes in
-   [sigil/internal/storage/mysql/retry.go](/Users/cyriltovena/code/symphony-workspaces/GRA-55/sigil/internal/storage/mysql/retry.go:64).
+   [sigil/internal/storage/mysql/retry.go](sigil/internal/storage/mysql/retry.go:64).
 6. The currently deployed compactor image already contains PR #479 / `GRA-31`,
    so the recurrence is happening on a post-hardening binary rather than a
    stale pre-rollout build.
