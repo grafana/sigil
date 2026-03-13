@@ -26,9 +26,9 @@ bounded follow-up implementation issue.
 - Reproduced the current runtime signal via Grafana Assistant with concrete pod,
   timestamp, and backlog evidence.
 - Mapped the recurring failures to the truncation SQL execution at
-  [sigil/internal/storage/mysql/compaction.go](/Users/cyriltovena/code/symphony-workspaces/GRA-55/sigil/internal/storage/mysql/compaction.go:68)
+  [sigil/internal/storage/mysql/compaction.go](../../../sigil/internal/storage/mysql/compaction.go#L68)
   and the compactor retry wrapper added by
-  [sigil/internal/storage/compactor/service.go](/Users/cyriltovena/code/symphony-workspaces/GRA-55/sigil/internal/storage/compactor/service.go:450).
+  [sigil/internal/storage/compactor/service.go](../../../sigil/internal/storage/compactor/service.go#L450).
 - Verified that the active dev compactor image
   `d580d1ef51c2593bc7a5aa140ebc6283ae690a72` already contains merge commit
   `cddaa7e` from PR #479 / `GRA-31`.
