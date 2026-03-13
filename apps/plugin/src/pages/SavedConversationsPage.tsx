@@ -133,9 +133,7 @@ export default function SavedConversationsPage({
           const resp = await dataSource.listSavedConversations(undefined, pageSize, cursor);
           setConversations(resp.items);
           setNextCursor(resp.next_cursor || undefined);
-          if (resp.total_count !== undefined) {
-            setAllSavedCount(resp.total_count);
-          }
+          setAllSavedCount(resp.total_count ?? resp.items.length);
           setAllSavedTotal(resp.total_count);
         } else {
           const resp = await dataSource.listCollectionMembers(activeCollectionID, pageSize, cursor);

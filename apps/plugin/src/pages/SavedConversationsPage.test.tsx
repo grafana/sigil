@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import SavedConversationsPage from './SavedConversationsPage';
 import type { EvaluationDataSource } from '../evaluation/api';
@@ -108,6 +108,28 @@ describe('SavedConversationsPage', () => {
       </MemoryRouter>
     );
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+  });
+
+  it('falls back to loaded item count when total_count is missing', async () => {
+    const ds = buildDataSource({
+      listSavedConversations: jest.fn(
+        async (): Promise<SavedConversationListResponse> => ({
+          items: [makeSC('s1', 'Auth flow edge case'), makeSC('s2', 'Rate limiting test')],
+          next_cursor: '',
+        })
+      ),
+    });
+    render(
+      <MemoryRouter>
+        <SavedConversationsPage dataSource={ds} />
+      </MemoryRouter>
+    );
+    await waitFor(() => screen.getByText('Auth flow edge case'));
+    const allSavedRow = screen.getByText('All saved').closest('div');
+    expect(allSavedRow).not.toBeNull();
+    if (allSavedRow) {
+      expect(within(allSavedRow).getByText('2')).toBeInTheDocument();
+    }
   });
 
   it('All saved count stays fixed when switching to a collection', async () => {
