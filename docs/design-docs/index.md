@@ -44,6 +44,7 @@ This folder stores durable engineering decisions for Sigil.
 - [`2026-03-10-conversation-detail-v2.md`](2026-03-10-conversation-detail-v2.md) (active)
 - [`2026-03-12-tool-runtime-analytics-page.md`](2026-03-12-tool-runtime-analytics-page.md) (active)
 - [`2026-03-12-sdk-conformance-harness.md`](2026-03-12-sdk-conformance-harness.md) (active)
+- [`2026-03-13-compactor-truncation-failure-spike.md`](2026-03-13-compactor-truncation-failure-spike.md) (completed)
 
 ## Drafts
 
