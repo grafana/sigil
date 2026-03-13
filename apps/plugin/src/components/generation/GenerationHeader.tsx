@@ -69,7 +69,8 @@ export default function GenerationHeader({ generation }: GenerationHeaderProps) 
           .join('\n')
       : '';
 
-  const totalIn = toNum(usage?.input_tokens) + toNum(usage?.cache_read_input_tokens) + toNum(usage?.cache_write_input_tokens);
+  const totalIn =
+    toNum(usage?.input_tokens) + toNum(usage?.cache_read_input_tokens) + toNum(usage?.cache_write_input_tokens);
   const totalOut = toNum(usage?.output_tokens);
 
   return (

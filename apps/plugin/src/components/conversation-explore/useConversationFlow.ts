@@ -129,7 +129,10 @@ function extractFlowNodes(
     if (kind !== null) {
       const gen = resolveGenerationForSpan(span, genIndex);
       const totalTokens = toNum(gen?.usage?.total_tokens) || undefined;
-      const inputTokens = toNum(gen?.usage?.input_tokens) + toNum(gen?.usage?.cache_read_input_tokens) + toNum(gen?.usage?.cache_write_input_tokens);
+      const inputTokens =
+        toNum(gen?.usage?.input_tokens) +
+        toNum(gen?.usage?.cache_read_input_tokens) +
+        toNum(gen?.usage?.cache_write_input_tokens);
       const outputTokens = toNum(gen?.usage?.output_tokens);
       const startMs = Number((span.startTimeUnixNano - conversationStartNs) / NS_PER_MS);
 

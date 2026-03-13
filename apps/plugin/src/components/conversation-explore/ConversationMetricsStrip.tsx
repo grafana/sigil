@@ -85,7 +85,10 @@ export default function ConversationMetricsStrip({
 
     return sorted.map((gen) => {
       const cost = generationCosts?.get(gen.generation_id);
-      const inputTokens = toNum(gen.usage?.input_tokens) + toNum(gen.usage?.cache_read_input_tokens) + toNum(gen.usage?.cache_write_input_tokens);
+      const inputTokens =
+        toNum(gen.usage?.input_tokens) +
+        toNum(gen.usage?.cache_read_input_tokens) +
+        toNum(gen.usage?.cache_write_input_tokens);
       const outputTokens = toNum(gen.usage?.output_tokens);
       const totalTokens = toNum(gen.usage?.total_tokens) || inputTokens + outputTokens;
       return {
