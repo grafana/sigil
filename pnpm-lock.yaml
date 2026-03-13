@@ -162,10 +162,10 @@ importers:
         specifier: ^5.0.0
         version: 5.0.0(webpack@5.105.2)
       jest:
-        specifier: ^30.0.0
+        specifier: ^30.2.0
         version: 30.2.0(@types/node@24.11.0)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.19))(@types/node@24.11.0)(typescript@5.9.3))
       jest-environment-jsdom:
-        specifier: ^30.0.0
+        specifier: ^30.2.0
         version: 30.2.0
       prettier:
         specifier: ^3.6.0
@@ -13479,7 +13479,7 @@ snapshots:
       '@jest/environment': 30.2.0
       '@jest/environment-jsdom-abstract': 30.2.0(jsdom@26.1.0)
       '@types/jsdom': 21.1.7
-      '@types/node': 24.11.0
+      '@types/node': 24.12.0
       jsdom: 26.1.0
     transitivePeerDependencies:
       - bufferutil
