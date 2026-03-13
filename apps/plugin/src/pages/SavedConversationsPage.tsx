@@ -184,6 +184,15 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
     try {
       await Promise.all([...ids].map((id) => dataSource.deleteSavedConversation(id)));
       setSelectedIDs(new Set());
+      setAllSavedCount((prev) => Math.max(0, prev - ids.size));
+      if (activeCollectionID) {
+        setCollections((prev) =>
+          prev.map((c) => c.collection_id === activeCollectionID
+            ? { ...c, member_count: Math.max(0, c.member_count - ids.size) }
+            : c
+          )
+        );
+      }
       await loadConversations();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to unsave conversations');
@@ -226,6 +235,7 @@ export default function SavedConversationsPage({ dataSource = defaultEvaluationD
 
   const handlePageSizeChange = (size: number) => {
     setPageSize(size);
+    setCurrentCursor(undefined);
     setNextCursor(undefined);
     setPrevCursors([]);
   };

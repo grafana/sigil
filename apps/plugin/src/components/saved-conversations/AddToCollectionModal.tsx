@@ -77,7 +77,6 @@ export function AddToCollectionModal({
         )
       );
       onSaved();
-      onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save');
     } finally {

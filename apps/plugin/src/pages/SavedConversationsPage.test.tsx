@@ -37,6 +37,7 @@ function buildDataSource(overrides?: Partial<EvaluationDataSource>): EvaluationD
     createCollection: jest.fn(async (req) => makeCollection('col-new', req.name)),
     updateCollection: jest.fn(async (_, req) => makeCollection('col-1', req.name ?? 'Updated')),
     deleteCollection: jest.fn(async () => {}),
+    deleteSavedConversation: jest.fn(async () => {}),
     addCollectionMembers: jest.fn(async () => {}),
     removeCollectionMember: jest.fn(async () => {}),
   };
@@ -98,6 +99,37 @@ describe('SavedConversationsPage', () => {
     // All saved count should still be 2, not 1
     const allSavedCount = screen.getAllByText('2');
     expect(allSavedCount.length).toBeGreaterThan(0);
+  });
+
+  it('decrements allSavedCount and collection member_count after unsave from collection view', async () => {
+    const ds = buildDataSource({
+      listSavedConversations: jest.fn(async (): Promise<SavedConversationListResponse> => ({
+        items: [makeSC('s1', 'Auth flow edge case'), makeSC('s2', 'Rate limiting test')],
+        next_cursor: '',
+        total_count: 2,
+      })),
+    });
+    render(
+      <MemoryRouter>
+        <SavedConversationsPage dataSource={ds} />
+      </MemoryRouter>
+    );
+    await waitFor(() => screen.getByText('Regression tests'));
+    // Initial "All saved" count is 2
+    expect(screen.getAllByText('2').length).toBeGreaterThan(0);
+    // Switch to a collection
+    fireEvent.click(screen.getByText('Regression tests'));
+    await waitFor(() => screen.getByText('Auth flow edge case'));
+    // Select and unsave from collection view
+    fireEvent.click(screen.getByLabelText('Select Auth flow edge case'));
+    await waitFor(() => screen.getByText(/^unsave$/i));
+    fireEvent.click(screen.getByText(/^unsave$/i));
+    // Confirm the unsave dialog
+    await waitFor(() => screen.getAllByText(/^unsave$/i).length > 1);
+    fireEvent.click(screen.getAllByText(/^unsave$/i)[1]);
+    await waitFor(() => expect(ds.deleteSavedConversation).toHaveBeenCalledWith('s1'));
+    // allSavedCount should have been decremented
+    expect(screen.getAllByText('1').length).toBeGreaterThan(0);
   });
 
   it('calls removeCollectionMember when Remove is clicked from active collection', async () => {
