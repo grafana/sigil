@@ -39,7 +39,10 @@ audience: both
 
 ## Deployment Topologies
 
-- Direct generation-to-Sigil:
+- Grafana Cloud:
+  - SDK generation export uses `basic` auth mode.
+  - `Authorization: Basic <base64(instance_id:api_key)>` is the standard Grafana Cloud credential format.
+- Direct generation-to-Sigil (self-hosted):
   - SDK generation export uses `tenant` auth mode and sends `X-Scope-OrgID`.
 - Split path (generation direct, traces via collector/alloy):
   - generation export auth is configured in SDKs.
@@ -110,6 +113,7 @@ audience: both
   - `none`
   - `tenant` (requires tenant id)
   - `bearer` (requires bearer token)
+  - `basic` (requires password + user or tenant id; standard for Grafana Cloud)
 - Explicit transport headers override SDK-injected `Authorization` and `X-Scope-OrgID`.
 
 ## Span Shape Emitted by SDKs
