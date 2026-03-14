@@ -141,3 +141,68 @@ func TestIsRetryableLockError(t *testing.T) {
 		})
 	}
 }
+
+func TestClassifyError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want ErrorDetails
+	}{
+		{
+			name: "retryable lock mysql error",
+			err: &mysqlDriver.MySQLError{
+				Number:   1213,
+				SQLState: [5]byte{'4', '0', '0', '0', '1'},
+				Message:  "Deadlock found when trying to get lock; try restarting transaction",
+			},
+			want: ErrorDetails{
+				Class:      ErrorClassRetryableLock,
+				Retryable:  true,
+				MySQLErrno: 1213,
+				SQLState:   "40001",
+				Message:    "Deadlock found when trying to get lock; try restarting transaction",
+			},
+		},
+		{
+			name: "retryable connection driver error",
+			err:  driver.ErrBadConn,
+			want: ErrorDetails{
+				Class:     ErrorClassRetryableConnection,
+				Retryable: true,
+				Message:   driver.ErrBadConn.Error(),
+			},
+		},
+		{
+			name: "non retryable mysql sql error",
+			err: &mysqlDriver.MySQLError{
+				Number:   1064,
+				SQLState: [5]byte{'4', '2', '0', '0', '0'},
+				Message:  "You have an error in your SQL syntax",
+			},
+			want: ErrorDetails{
+				Class:      ErrorClassNonRetryableSQL,
+				Retryable:  false,
+				MySQLErrno: 1064,
+				SQLState:   "42000",
+				Message:    "You have an error in your SQL syntax",
+			},
+		},
+		{
+			name: "unknown generic error",
+			err:  errors.New("boom"),
+			want: ErrorDetails{
+				Class:   ErrorClassUnknown,
+				Message: "boom",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ClassifyError(tc.err)
+			if got != tc.want {
+				t.Fatalf("ClassifyError(%v)=%+v, want %+v", tc.err, got, tc.want)
+			}
+		})
+	}
+}
