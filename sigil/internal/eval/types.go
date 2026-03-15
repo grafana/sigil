@@ -2,6 +2,7 @@ package eval
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -274,11 +275,16 @@ const (
 )
 
 func IsValidSavedConversationSource(s string) bool {
-	switch SavedConversationSource(s) {
+	_, ok := ParseSavedConversationSource(s)
+	return ok
+}
+
+func ParseSavedConversationSource(s string) (SavedConversationSource, bool) {
+	switch SavedConversationSource(strings.TrimSpace(s)) {
 	case SavedConversationSourceTelemetry, SavedConversationSourceManual:
-		return true
+		return SavedConversationSource(strings.TrimSpace(s)), true
 	default:
-		return false
+		return "", false
 	}
 }
 
