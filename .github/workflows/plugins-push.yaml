@@ -21,6 +21,7 @@ permissions: {}
 jobs:
   cd:
     name: CI / CD
+    # zizmor: ignore[unpinned-uses] — plugin-ci-workflows requires tagged releases, not SHA pins
     uses: grafana/plugin-ci-workflows/.github/workflows/cd.yml@ci-cd-workflows/v6.1.1
     permissions:
       contents: write
