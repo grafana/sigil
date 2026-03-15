@@ -1,4 +1,4 @@
-"""Shared callback handler runtime for Python framework integrations."""
+"""Shared callback handler runtime for Python framework integrations."""  # noqa: test ci
 
 from __future__ import annotations
 
