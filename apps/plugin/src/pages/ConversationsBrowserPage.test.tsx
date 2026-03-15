@@ -3,8 +3,11 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider, createMemoryRouter, useLocation, useParams } from 'react-router-dom';
 import ConversationsBrowserPage from './ConversationsBrowserPage';
 import type { ConversationsDataSource } from '../conversation/api';
+import type { DashboardDataSource } from '../dashboard/api';
+import type { PrometheusQueryResponse } from '../dashboard/types';
 import { buildConversationTagDiscoveryQuery } from '../conversation/searchTagScope';
 import type { FilterToolbarProps } from '../components/filters/FilterToolbar';
+import { formatStatValue } from '../components/dashboard/dashboardShared';
 
 jest.mock('@grafana/ui', () => {
   const actual = jest.requireActual('@grafana/ui');
@@ -211,6 +214,64 @@ function createStreamingDataSource(): MockConversationsDataSource {
   return dataSource;
 }
 
+function createDashboardDataSource(): DashboardDataSource {
+  const costResponse: PrometheusQueryResponse = {
+    status: 'success',
+    data: {
+      resultType: 'vector',
+      result: [
+        {
+          metric: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'input' },
+          value: [0, '100'],
+        },
+        {
+          metric: { gen_ai_provider_name: 'openai', gen_ai_request_model: 'gpt-4o', gen_ai_token_type: 'output' },
+          value: [0, '40'],
+        },
+      ],
+    },
+  };
+  const emptyRangeResponse: PrometheusQueryResponse = {
+    status: 'success',
+    data: { resultType: 'matrix', result: [] },
+  };
+
+  return {
+    queryRange: jest.fn(async () => emptyRangeResponse),
+    queryInstant: jest.fn(async () => costResponse),
+    labels: jest.fn(async () => []),
+    labelValues: jest.fn(async () => []),
+    resolveModelCards: jest.fn(async (pairs) => ({
+      resolved: pairs.map(({ provider, model }) => ({
+        provider,
+        model,
+        status: 'resolved' as const,
+        match_strategy: 'exact' as const,
+        card: {
+          model_key: 'openai:gpt-4o',
+          source_model_id: 'openai/gpt-4o',
+          pricing: {
+            prompt_usd_per_token: 0.01,
+            completion_usd_per_token: 0.02,
+            request_usd: null,
+            image_usd: null,
+            web_search_usd: null,
+            input_cache_read_usd_per_token: null,
+            input_cache_write_usd_per_token: null,
+          },
+        },
+      })),
+      freshness: {
+        catalog_last_refreshed_at: null,
+        stale: false,
+        soft_stale: false,
+        hard_stale: false,
+        source_path: 'memory_live',
+      },
+    })),
+  };
+}
+
 describe('ConversationsBrowserPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -218,7 +279,11 @@ describe('ConversationsBrowserPage', () => {
     window.sessionStorage.clear();
   });
 
-  function renderPage(dataSource: ConversationsDataSource, initialEntry = '/conversations') {
+  function renderPage(
+    dataSource: ConversationsDataSource,
+    initialEntry = '/conversations',
+    dashboardDataSource: DashboardDataSource = createDashboardDataSource()
+  ) {
     const router = createMemoryRouter(
       [
         {
@@ -227,7 +292,7 @@ describe('ConversationsBrowserPage', () => {
         },
         {
           path: '/conversations',
-          element: <ConversationsBrowserPage dataSource={dataSource} />,
+          element: <ConversationsBrowserPage dataSource={dataSource} dashboardDataSource={dashboardDataSource} />,
         },
       ],
       { initialEntries: [initialEntry] }
@@ -259,6 +324,12 @@ describe('ConversationsBrowserPage', () => {
     expect(await screen.findByLabelText('select conversation conv-a')).toBeInTheDocument();
     expect(screen.queryByText('Explore route')).not.toBeInTheDocument();
     expect(screen.getByText('Agents')).toBeInTheDocument();
+    expect(screen.getByText('Estimated Cost')).toBeInTheDocument();
+    expect(screen.getByText('Avg Cost / Conversation')).toBeInTheDocument();
+    expect(screen.getByText('Avg Cost / Call')).toBeInTheDocument();
+    expect(screen.getByText(formatStatValue(1.8, 'currencyUSD'))).toBeInTheDocument();
+    expect(screen.getByText(formatStatValue(0.9, 'currencyUSD'))).toBeInTheDocument();
+    expect(screen.getByText(formatStatValue(0.45, 'currencyUSD'))).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('select conversation conv-b'));
     expect(await screen.findByText('Explore route')).toBeInTheDocument();

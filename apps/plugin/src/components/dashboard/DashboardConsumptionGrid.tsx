@@ -14,7 +14,12 @@ import {
 } from '../../dashboard/types';
 import { extractResolvePairs, BreakdownStatPanel, formatRelativeTime, formatWindowLabel } from './dashboardShared';
 import { TopStat } from '../TopStat';
-import { calculateTotalCost, calculateTotalCostByGroup, calculateCostTimeSeries } from '../../dashboard/cost';
+import {
+  averageCost,
+  calculateTotalCost,
+  calculateTotalCostByGroup,
+  calculateCostTimeSeries,
+} from '../../dashboard/cost';
 import {
   computeStep,
   computeRateInterval,
@@ -32,7 +37,7 @@ import { MetricPanel } from './MetricPanel';
 import { useResolvedModelPricing } from './useResolvedModelPricing';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../../conversation/api';
 import { buildConversationSearchFilter } from '../../conversation/filters';
-import type { ConversationSearchResult } from '../../conversation/types';
+import type { ConversationSearchResult, ConversationStatsResponse } from '../../conversation/types';
 import { PLUGIN_BASE, ROUTES, buildConversationExploreRoute } from '../../constants';
 import { ViewConversationsLink } from './ViewConversationsLink';
 import { buildAgentDetailHref } from './ViewAgentsLink';
@@ -60,6 +65,18 @@ const noThresholds = {
 };
 
 const consistentColor = { mode: 'palette-classic-by-name' };
+const EMPTY_CONVERSATION_STATS: ConversationStatsResponse = {
+  totalConversations: 0,
+  totalTokens: 0,
+  avgCallsPerConversation: 0,
+  activeLast7d: 0,
+  ratedConversations: 0,
+  badRatedPct: 0,
+};
+type ConversationStatsState = {
+  data: ConversationStatsResponse;
+  requestKey: string;
+};
 
 export function DashboardConsumptionGrid({
   dataSource,
@@ -88,6 +105,17 @@ export function DashboardConsumptionGrid({
   const step = useMemo(() => computeStep(from, to), [from, to]);
   const interval = useMemo(() => computeRateInterval(step), [step]);
   const rangeDuration = useMemo(() => computeRangeDuration(from, to), [from, to]);
+  const filterString = useMemo(() => buildConversationSearchFilter(filters), [filters]);
+  const getConversationStats = conversationsDataSource.getConversationStats;
+  const hasConversationStatsApi = Boolean(getConversationStats);
+  const [conversationStatsState, setConversationStatsState] = useState<ConversationStatsState>({
+    data: EMPTY_CONVERSATION_STATS,
+    requestKey: '',
+  });
+  const [previousConversationStatsState, setPreviousConversationStatsState] = useState<ConversationStatsState>({
+    data: EMPTY_CONVERSATION_STATS,
+    requestKey: '',
+  });
 
   // --- Top stats (always aggregate, no breakdown) ---
   const tokensTotalStat = usePrometheusQuery(dataSource, totalTokensQuery(filters, rangeDuration), from, to, 'instant');
@@ -295,6 +323,84 @@ export function DashboardConsumptionGrid({
       ? (prevCacheReadValue / (prevInputTokensValue + prevCacheReadValue)) * 100
       : 0;
   const comparisonLabel = `previous ${formatWindowLabel(windowSize)}`;
+  const currentConversationRequestKey = `${filterString}:${timeRange.from.toISOString()}:${timeRange.to.toISOString()}`;
+  const previousConversationRequestKey = `${filterString}:${dateTime((from - windowSize) * 1000).toISOString()}:${dateTime(
+    (to - windowSize) * 1000
+  ).toISOString()}`;
+  const currentConversationStats = hasConversationStatsApi ? conversationStatsState.data : EMPTY_CONVERSATION_STATS;
+  const previousConversationStatsValue = hasConversationStatsApi
+    ? previousConversationStatsState.data
+    : EMPTY_CONVERSATION_STATS;
+  const currentConversationCount = currentConversationStats.totalConversations;
+  const currentCallCount = currentConversationCount * currentConversationStats.avgCallsPerConversation;
+  const previousConversationCount = previousConversationStatsValue.totalConversations;
+  const previousCallCount = previousConversationCount * previousConversationStatsValue.avgCallsPerConversation;
+  const averageCostPerConversation = averageCost(totalCost.totalCost, currentConversationCount);
+  const previousAverageCostPerConversation = averageCost(prevTotalCost.totalCost, previousConversationCount);
+  const averageCostPerCall = averageCost(totalCost.totalCost, currentCallCount);
+  const previousAverageCostPerCall = averageCost(prevTotalCost.totalCost, previousCallCount);
+  const currentConversationStatsLoading =
+    hasConversationStatsApi && conversationStatsState.requestKey !== currentConversationRequestKey;
+  const previousConversationStatsLoadingValue =
+    hasConversationStatsApi && previousConversationStatsState.requestKey !== previousConversationRequestKey;
+
+  useEffect(() => {
+    if (!getConversationStats) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void getConversationStats({
+      filters: filterString,
+      time_range: { from: timeRange.from.toISOString(), to: timeRange.to.toISOString() },
+    })
+      .then((stats) => {
+        if (!cancelled) {
+          setConversationStatsState({ data: stats, requestKey: currentConversationRequestKey });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setConversationStatsState({ data: EMPTY_CONVERSATION_STATS, requestKey: currentConversationRequestKey });
+        }
+      });
+
+    void getConversationStats({
+      filters: filterString,
+      time_range: {
+        from: dateTime((from - windowSize) * 1000).toISOString(),
+        to: dateTime((to - windowSize) * 1000).toISOString(),
+      },
+    })
+      .then((stats) => {
+        if (!cancelled) {
+          setPreviousConversationStatsState({ data: stats, requestKey: previousConversationRequestKey });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPreviousConversationStatsState({
+            data: EMPTY_CONVERSATION_STATS,
+            requestKey: previousConversationRequestKey,
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    filterString,
+    from,
+    getConversationStats,
+    currentConversationRequestKey,
+    previousConversationRequestKey,
+    timeRange.from,
+    timeRange.to,
+    to,
+    windowSize,
+  ]);
 
   const allDataLoading =
     tokensTotalStat.loading ||
@@ -408,6 +514,26 @@ export function DashboardConsumptionGrid({
           loading={costTokensData.loading || resolvedPricing.loading}
           prevValue={prevTotalCost.totalCost}
           prevLoading={prevCostTokensData.loading || resolvedPricing.loading}
+          invertChange
+          comparisonLabel={comparisonLabel}
+        />
+        <TopStat
+          label="Avg Cost / Conversation"
+          value={averageCostPerConversation}
+          unit="currencyUSD"
+          loading={costTokensData.loading || resolvedPricing.loading || currentConversationStatsLoading}
+          prevValue={previousAverageCostPerConversation}
+          prevLoading={prevCostTokensData.loading || resolvedPricing.loading || previousConversationStatsLoadingValue}
+          invertChange
+          comparisonLabel={comparisonLabel}
+        />
+        <TopStat
+          label="Avg Cost / Call"
+          value={averageCostPerCall}
+          unit="currencyUSD"
+          loading={costTokensData.loading || resolvedPricing.loading || currentConversationStatsLoading}
+          prevValue={previousAverageCostPerCall}
+          prevLoading={prevCostTokensData.loading || resolvedPricing.loading || previousConversationStatsLoadingValue}
           invertChange
           comparisonLabel={comparisonLabel}
         />
