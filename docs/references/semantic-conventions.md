@@ -128,14 +128,14 @@ The normalized generation payload keeps provider-only details in `metadata` with
 
 | Instrument | Type | Unit | Per-recording Attributes |
 |---|---|---|---|
-| `gen_ai.client.operation.duration` | Histogram | `s` | `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`, `error.type`, `error.category` |
+| `gen_ai.client.operation.duration` | Histogram | `s` | `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.tool.name`, `gen_ai.agent.name`, `error.type`, `error.category` |
 | `gen_ai.client.token.usage` | Histogram | `token` | `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name`, `gen_ai.token.type` |
 | `gen_ai.client.time_to_first_token` | Histogram | `s` | `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name` |
 | `gen_ai.client.tool_calls_per_operation` | Histogram | `count` | `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.agent.name` |
 
 `gen_ai.token.type` values: `input`, `output`, `cache_read`, `cache_write`, `cache_creation`, `reasoning`.
 
-For `execute_tool` operations, `gen_ai.client.operation.duration` records `gen_ai.request.model` as the model that requested the tool call and `gen_ai.provider.name` as the provider that served that model (both when provided by the caller; empty otherwise). The tool identity is captured via `gen_ai.tool.name` on the span.
+For `execute_tool` operations, `gen_ai.client.operation.duration` records `gen_ai.request.model` as the model that requested the tool call, `gen_ai.provider.name` as the provider that served that model, and `gen_ai.tool.name` as the executed tool name (all when provided by the caller; empty otherwise).
 
 ---
 

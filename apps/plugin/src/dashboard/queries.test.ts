@@ -7,6 +7,10 @@ import {
   computeRangeDuration,
   totalOpsQuery,
   totalErrorsQuery,
+  topToolErrorRateQuery,
+  topToolErrorsQuery,
+  topToolExecutionsQuery,
+  topToolLatencyQuery,
   errorRateQuery,
   latencyStatQuery,
   tokensByModelAndTypeQuery,
@@ -242,6 +246,12 @@ describe('stat query builders', () => {
     );
   });
 
+  it('totalErrorsQuery with breakdown', () => {
+    expect(totalErrorsQuery(noFilters, '3600s', 'model')).toBe(
+      'sum by (gen_ai_request_model)(increase(gen_ai_client_operation_duration_seconds_count{error_type!=""}[3600s]))'
+    );
+  });
+
   it('errorRateQuery', () => {
     const q = errorRateQuery(noFilters, '3600s');
     expect(q).toContain('error_type!=""');
@@ -268,6 +278,32 @@ describe('stat query builders', () => {
   it('latencyStatQuery with agent breakdown', () => {
     const q = latencyStatQuery(noFilters, '3600s', 'agent');
     expect(q).toContain('sum by (le, gen_ai_agent_name)');
+  });
+
+  it('topToolExecutionsQuery filters to execute_tool and groups by tool name label', () => {
+    expect(topToolExecutionsQuery(withFilters, '3600s')).toContain('sum by (gen_ai_tool_name)');
+    expect(topToolExecutionsQuery(withFilters, '3600s')).toContain('gen_ai_operation_name="execute_tool"');
+  });
+
+  it('topToolErrorsQuery filters to execute_tool errors by tool name', () => {
+    const query = topToolErrorsQuery(noFilters, '3600s');
+    expect(query).toContain('sum by (gen_ai_tool_name)');
+    expect(query).toContain('error_type!=""');
+    expect(query).toContain('gen_ai_operation_name="execute_tool"');
+  });
+
+  it('topToolErrorRateQuery filters to execute_tool and computes percent by tool', () => {
+    const query = topToolErrorRateQuery(noFilters, '3600s');
+    expect(query).toContain('sum by (gen_ai_tool_name)');
+    expect(query).toContain('* 100');
+    expect(query).toContain('gen_ai_operation_name="execute_tool"');
+  });
+
+  it('topToolLatencyQuery computes tool latency quantiles from execute_tool buckets', () => {
+    const query = topToolLatencyQuery(noFilters, '3600s', 0.95);
+    expect(query).toContain('histogram_quantile(0.95');
+    expect(query).toContain('sum by (le, gen_ai_tool_name)');
+    expect(query).toContain('gen_ai_operation_name="execute_tool"');
   });
 
   it('tokensByModelAndTypeQuery', () => {

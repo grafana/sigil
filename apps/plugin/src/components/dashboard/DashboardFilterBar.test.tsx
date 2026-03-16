@@ -48,7 +48,10 @@ describe('DashboardFilterBar', () => {
     mockFilterToolbar.mockClear();
   });
 
-  function renderToolbar(showLabelFilters = true) {
+  function renderToolbar(
+    showLabelFilters = true,
+    extraProps: Partial<React.ComponentProps<typeof DashboardFilterBar>> = {}
+  ) {
     render(
       <DashboardFilterBar
         timeRange={timeRange}
@@ -68,6 +71,7 @@ describe('DashboardFilterBar', () => {
         onTimeRangeChange={jest.fn()}
         onFiltersChange={jest.fn()}
         onBreakdownChange={jest.fn()}
+        {...extraProps}
       />
     );
   }
@@ -75,7 +79,7 @@ describe('DashboardFilterBar', () => {
   it('shows arbitrary label filters on core analytics tabs', () => {
     renderToolbar(true);
 
-    expect(mockFilterToolbar).toHaveBeenCalledWith(
+    expect(mockFilterToolbar.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         hideLabelFilters: false,
         labelFilterOperators: PROM_LABEL_FILTER_OPERATORS,
@@ -88,7 +92,7 @@ describe('DashboardFilterBar', () => {
   it('hides arbitrary label filters outside the supported analytics tabs', () => {
     renderToolbar(false);
 
-    expect(mockFilterToolbar).toHaveBeenCalledWith(
+    expect(mockFilterToolbar.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         hideLabelFilters: true,
         labelFilterOperators: PROM_LABEL_FILTER_OPERATORS,
@@ -96,5 +100,25 @@ describe('DashboardFilterBar', () => {
         onLabelFilterRowOpenChange: expect.any(Function),
       })
     );
+  });
+
+  it('passes custom breakdown options through for specialized tabs', () => {
+    renderToolbar(true, {
+      breakdownOptions: [
+        { label: 'None', value: 'none' },
+        { label: 'Agent', value: 'agent' },
+        { label: 'Tool', value: 'tool' },
+      ],
+    });
+
+    const props = mockFilterToolbar.mock.calls.at(-1)?.[0] as {
+      children?: React.ReactElement<{ options?: Array<{ label: string; value: string }> }>;
+    };
+
+    expect(props.children?.props.options).toEqual([
+      { label: 'None', value: 'none' },
+      { label: 'Agent', value: 'agent' },
+      { label: 'Tool', value: 'tool' },
+    ]);
   });
 });

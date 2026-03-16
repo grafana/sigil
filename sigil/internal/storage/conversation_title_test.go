@@ -151,6 +151,13 @@ func TestConversationTitleFromGeneration(t *testing.T) {
 			want: "Legacy incident",
 		},
 		{
+			name: "ignores non-object attributes metadata",
+			generation: generationWithMetadata(map[string]*structpb.Value{
+				"attributes": structpb.NewStringValue("legacy title"),
+			}),
+			want: "",
+		},
+		{
 			name: "does not read title from output payload",
 			generation: &sigilv1.Generation{
 				Output: []*sigilv1.Message{

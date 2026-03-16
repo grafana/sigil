@@ -14,6 +14,7 @@ export type DashboardFilterBarProps = {
   timeRange: TimeRange;
   filters: DashboardFilters;
   breakdownBy: BreakdownDimension;
+  breakdownOptions?: Array<SelectableValue<BreakdownDimension>>;
   providerOptions: string[];
   modelOptions: string[];
   agentOptions: string[];
@@ -22,6 +23,9 @@ export type DashboardFilterBarProps = {
   dataSource: DashboardDataSource;
   from: number;
   to: number;
+  hideBreakdown?: boolean;
+  hideProviderFilter?: boolean;
+  hideModelFilter?: boolean;
   showLabelFilters?: boolean;
   showLabelFilterRow?: boolean;
   onLabelFilterRowOpenChange?: (isOpen: boolean) => void;
@@ -30,14 +34,18 @@ export type DashboardFilterBarProps = {
   onBreakdownChange: (breakdown: BreakdownDimension) => void;
 };
 
-const breakdownOptions: Array<SelectableValue<BreakdownDimension>> = (
-  Object.keys(breakdownLabel) as BreakdownDimension[]
-).map((key) => ({ label: breakdownLabel[key], value: key }));
+const defaultBreakdownOptions: Array<SelectableValue<BreakdownDimension>> = [
+  { label: breakdownLabel.none, value: 'none' },
+  { label: breakdownLabel.provider, value: 'provider' },
+  { label: breakdownLabel.model, value: 'model' },
+  { label: breakdownLabel.agent, value: 'agent' },
+];
 
 export function DashboardFilterBar({
   timeRange,
   filters,
   breakdownBy,
+  breakdownOptions = defaultBreakdownOptions,
   providerOptions,
   modelOptions,
   agentOptions,
@@ -46,6 +54,9 @@ export function DashboardFilterBar({
   dataSource,
   from,
   to,
+  hideBreakdown = false,
+  hideProviderFilter = false,
+  hideModelFilter = false,
   showLabelFilters = true,
   showLabelFilterRow,
   onLabelFilterRowOpenChange,
@@ -72,6 +83,8 @@ export function DashboardFilterBar({
       dataSource={dataSource}
       from={from}
       to={to}
+      hideProviderFilter={hideProviderFilter}
+      hideModelFilter={hideModelFilter}
       onTimeRangeChange={onTimeRangeChange}
       onFiltersChange={onFiltersChange}
       hideLabelFilters={!showLabelFilters}
@@ -80,14 +93,16 @@ export function DashboardFilterBar({
       showLabelFilterRow={showLabelFilterRow}
       onLabelFilterRowOpenChange={onLabelFilterRowOpenChange}
     >
-      <Select<BreakdownDimension>
-        options={breakdownOptions}
-        value={breakdownBy === 'none' ? null : breakdownBy}
-        onChange={handleBreakdownChange}
-        placeholder="Breakdown by"
-        prefix={breakdownBy !== 'none' ? 'Breakdown by' : undefined}
-        width={28}
-      />
+      {!hideBreakdown && (
+        <Select<BreakdownDimension>
+          options={breakdownOptions}
+          value={breakdownBy === 'none' ? null : breakdownBy}
+          onChange={handleBreakdownChange}
+          placeholder="Breakdown by"
+          prefix={breakdownBy !== 'none' ? 'Breakdown by' : undefined}
+          width={28}
+        />
+      )}
     </FilterToolbar>
   );
 }

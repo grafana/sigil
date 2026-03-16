@@ -52,7 +52,7 @@ We should add ingest-time tool projection data only if we need one or more of th
 
 2. Tool execution metrics already exist.
    - `gen_ai.client.operation.duration` covers `execute_tool`.
-   - For `execute_tool`, the tool name is recorded in `gen_ai.request.model`, which means Prometheus can already rank tool executions and tool errors by grouping on `gen_ai_request_model` while filtering `gen_ai_operation_name="execute_tool"`.
+   - For `execute_tool`, the calling model/provider stay in `gen_ai.request.model` and `gen_ai.provider.name`, while tool identity is emitted as `gen_ai.tool.name`. Prometheus can rank tool executions and tool errors by grouping on the exported `gen_ai_tool_name` label while filtering `gen_ai_operation_name="execute_tool"`.
    - Source: `docs/references/semantic-conventions.md`
 
 3. Conversation search already supports tool filtering.
@@ -166,9 +166,9 @@ Use Prometheus:
 
 - metric: `gen_ai_client_operation_duration_seconds_count`
 - filter: `gen_ai_operation_name="execute_tool"`
-- group by: `gen_ai_request_model`
+- group by: `gen_ai_tool_name`
 
-This is slightly awkward semantically because the tool name rides in the model label for `execute_tool`, but it is sufficient for the page and should stay hidden behind plugin code.
+The calling model and provider remain available on `gen_ai_request_model` and `gen_ai_provider_name`; tool identity is grouped separately through `gen_ai_tool_name`.
 
 ### Most errors by tool
 

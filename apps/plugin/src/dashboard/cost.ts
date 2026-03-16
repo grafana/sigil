@@ -27,6 +27,13 @@ export type TotalCostResult = {
   unresolvedSeries: UnresolvedCostSeries[];
 };
 
+export function averageCost(totalCost: number, count: number): number {
+  if (!Number.isFinite(totalCost) || !Number.isFinite(count) || count <= 0) {
+    return 0;
+  }
+  return totalCost / count;
+}
+
 export function pricingKey(provider: string, model: string): string {
   return `${provider.trim().toLowerCase()}::${model.trim()}`;
 }

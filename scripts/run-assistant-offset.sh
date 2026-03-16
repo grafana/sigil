@@ -114,6 +114,11 @@ if ! [[ "${OFFSET}" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
+if (( OFFSET > 65535 )); then
+  echo "Offset must be <= 65535, got: ${OFFSET}" >&2
+  exit 1
+fi
+
 COMPOSE_FILE="${ASSISTANT_DIR}/docker-compose.yaml"
 if [[ ! -f "${COMPOSE_FILE}" ]]; then
   echo "Assistant compose file not found: ${COMPOSE_FILE}" >&2
@@ -195,184 +200,13 @@ if [[ "${ACTION}" == "up" ]]; then
 fi
 docker compose "${CONFIG_ARGS[@]}" config > "${TMP_RESOLVED}"
 
-python3 - "${SIGIL_DIR}" "${TMP_RESOLVED}" "${TMP_COMPOSE}" "${OFFSET}" "${PROJECT_NAME}" "${SIGIL_DIR}/docker-compose.yaml" "${SIGIL_DIR}/.config/docker-compose-base.yaml" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-sigil_dir = Path(sys.argv[1])
-sys.path.insert(0, str(sigil_dir))
-
-from scripts.compose_yaml import (
-  CONTAINER_NAME_RE,
-  PORTS_KEY_RE,
-  PORTS_EXIT_KEY_RE,
-  SERVICE_RE,
-)
-
-compose_path = Path(sys.argv[2])
-output_path = Path(sys.argv[3])
-offset = int(sys.argv[4])
-project_name = sys.argv[5]
-reserved_sources = [Path(p) for p in sys.argv[6:]]
-
-lines = compose_path.read_text(encoding="utf-8").splitlines()
-
-in_services = False
-current_service = None
-in_ports = False
-services_order = []
-ports_by_service = {}
-service_has_container_name = {}
-in_service_block = False
-
-port_item_re = re.compile(r"""^(\s*-\s*)['"]?([^'"]+)['"]?(\s*(?:#.*)?)$""")
-published_re = re.compile(r'^(\s*published:\s*"?)(\d+)("?)(\s*(?:#.*)?)$')
-
-def parse_port_mapping(spec: str):
-  suffix = ""
-  if "/" in spec:
-    base, proto = spec.rsplit("/", 1)
-    suffix = "/" + proto
-  else:
-    base = spec
-
-  parts = base.split(":")
-  if len(parts) == 2:
-    host, container = parts
-    ip = None
-  elif len(parts) == 3:
-    ip, host, container = parts
-  else:
-    return None, None, None, suffix
-
-  if not host.isdigit():
-    return ip, None, container, suffix
-
-  return ip, int(host), container, suffix
-
-def render_mapping(ip, host, container, suffix):
-  if ip is None:
-    return f"{host}:{container}{suffix}"
-  return f"{ip}:{host}:{container}{suffix}"
-
-def safe_container_name(project: str, service: str):
-  raw = f"{project}-{service}".lower()
-  clean = re.sub(r"[^a-z0-9_.-]", "-", raw)
-  clean = re.sub(r"-{2,}", "-", clean).strip("-")
-  return clean or "assistant-offset"
-
-def collect_reserved_ports(paths):
-  reserved = set()
-  pat = re.compile(r"""^\s*-\s*['"]?([^'"]+)['"]?(?:\s*#.*)?$""")
-  for p in paths:
-    if not p.exists():
-      continue
-    for raw in p.read_text(encoding="utf-8").splitlines():
-      m = pat.match(raw)
-      if not m:
-        continue
-      _ip, host, _container, _suffix = parse_port_mapping(m.group(1).strip())
-      if host is not None:
-        reserved.add(host)
-  return reserved
-
-reserved_ports = collect_reserved_ports(reserved_sources)
-used_ports = set(reserved_ports)
-
-out = []
-
-for line in lines:
-  if not in_services and line.strip() == "services:":
-    in_services = True
-    out.append(line)
-    continue
-
-  if in_services and line and not line.startswith(" "):
-    # End of services section, flush container_name for previous service if needed.
-    if current_service and not service_has_container_name.get(current_service, False):
-      out.append(f'    container_name: "{safe_container_name(project_name, current_service)}"')
-    current_service = None
-    in_ports = False
-    in_service_block = False
-    in_services = False
-    out.append(line)
-    continue
-
-  svc_match = SERVICE_RE.match(line) if in_services else None
-  if svc_match:
-    # Starting a new service; ensure previous service has a container_name.
-    if current_service and not service_has_container_name.get(current_service, False):
-      out.append(f'    container_name: "{safe_container_name(project_name, current_service)}"')
-
-    current_service = svc_match.group(1)
-    in_service_block = True
-    in_ports = False
-    services_order.append(current_service)
-    ports_by_service[current_service] = []
-    service_has_container_name[current_service] = False
-    out.append(line)
-    continue
-
-  if in_service_block and current_service:
-    if PORTS_KEY_RE.match(line):
-      in_ports = True
-      out.append(line)
-      continue
-
-    if in_ports:
-      pub_match = published_re.match(line)
-      if pub_match:
-        prefix, published_port, quote_suffix, trailing_comment = pub_match.groups()
-        host = int(published_port)
-        candidate = host + offset
-        while candidate in used_ports:
-          candidate += 1
-        used_ports.add(candidate)
-        ports_by_service[current_service].append(str(candidate))
-        out.append(f"{prefix}{candidate}{quote_suffix}{trailing_comment}")
-        continue
-
-      item_match = port_item_re.match(line.strip())
-      if item_match:
-        original_spec = item_match.group(2).strip()
-        trailing_comment = item_match.group(3) or ""
-        ip, host, container, suffix = parse_port_mapping(original_spec)
-        if host is not None:
-          candidate = host + offset
-          while candidate in used_ports:
-            candidate += 1
-          used_ports.add(candidate)
-          remapped = render_mapping(ip, candidate, container, suffix)
-          ports_by_service[current_service].append(remapped)
-          out.append(f'      - "{remapped}"{trailing_comment}')
-        else:
-          out.append(line)
-        continue
-      # Leaving ports block.
-      if PORTS_EXIT_KEY_RE.match(line) or SERVICE_RE.match(line):
-        in_ports = False
-
-    if CONTAINER_NAME_RE.match(line):
-      service_has_container_name[current_service] = True
-      out.append(f'    container_name: "{safe_container_name(project_name, current_service)}"')
-      continue
-
-  out.append(line)
-
-# File ended while still in a service.
-if current_service and not service_has_container_name.get(current_service, False):
-  out.append(f'    container_name: "{safe_container_name(project_name, current_service)}"')
-
-output_path.write_text("\n".join(out) + "\n", encoding="utf-8")
-
-print(f"Generated remapped compose: {output_path}")
-print(f"Remapped services: {len([s for s in services_order if ports_by_service.get(s)])}")
-for svc in services_order:
-  if not ports_by_service.get(svc):
-    continue
-  print(f"  {svc}: {', '.join(ports_by_service[svc])}")
-PY
+python3 "${SIGIL_DIR}/scripts/assistant_offset_compose.py" \
+  "${TMP_RESOLVED}" \
+  "${TMP_COMPOSE}" \
+  "${OFFSET}" \
+  "${PROJECT_NAME}" \
+  "${SIGIL_DIR}/docker-compose.yaml" \
+  "${SIGIL_DIR}/.config/docker-compose-base.yaml"
 
 RESOLVED_SERVICES="$(docker compose "${CONFIG_ARGS[@]}" config --services 2>/dev/null | paste -sd, -)"
 

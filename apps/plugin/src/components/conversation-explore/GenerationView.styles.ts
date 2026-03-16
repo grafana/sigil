@@ -265,6 +265,9 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     letterSpacing: '0.01em',
     justifySelf: 'center',
   }),
+  usageDim: css({
+    color: theme.colors.text.disabled,
+  }),
   usageSep: css({
     margin: `0 ${theme.spacing(0.5)}`,
     color: theme.colors.border.medium,

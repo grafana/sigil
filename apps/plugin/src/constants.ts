@@ -4,6 +4,8 @@ export const ROUTES = {
   Root: '',
   PlaygroundSparkles: 'playground/sparkles',
   Analytics: 'analytics',
+  AnalyticsTools: 'analytics/tools',
+  AnalyticsTool: 'analytics/tools/:toolName',
   Tutorial: 'tutorial',
   Conversations: 'conversations',
   ConversationsSaved: 'conversations/saved',
@@ -16,6 +18,10 @@ export const ROUTES = {
 
 export function buildConversationExploreRoute(conversationID: string): string {
   return `${ROUTES.Conversations}/${encodeURIComponent(conversationID)}/explore`;
+}
+
+export function buildToolAnalyticsRoute(toolName: string): string {
+  return `${ROUTES.AnalyticsTools}/${encodeURIComponent(toolName)}`;
 }
 
 export function buildAgentDetailByNameRoute(agentName: string): string {

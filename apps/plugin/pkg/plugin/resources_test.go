@@ -1255,6 +1255,71 @@ func TestCallResourceStreamsConversationSearchFallbackUsesTempoWhenBackendStream
 	}
 }
 
+func TestCallResourceSearchBypassesBackendProxyForToolFilters(t *testing.T) {
+	searchRequests := 0
+	var tempoQuery string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/conversations/search":
+			searchRequests++
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		case "/api/datasources/proxy/uid/tempo/api/search":
+			tempoQuery = r.URL.Query().Get("q")
+			_, _ = io.WriteString(w, buildTempoSearchResponse([]tempoSearchTraceFixture{
+				{
+					TraceID:           "trace-1",
+					StartTimeUnixNano: "1739610600000000000",
+					ConversationID:    "conv-1",
+					GenerationID:      "gen-1a",
+					Model:             "gpt-5",
+					Agent:             "assistant",
+					UserID:            "user-42",
+				},
+			}))
+		case "/api/v1/conversations:batch-metadata":
+			_, _ = io.WriteString(w, `{"items":[
+				{"conversation_id":"conv-1","conversation_title":"Tool route","generation_count":1,"first_generation_at":"2025-02-15T08:00:00Z","last_generation_at":"2025-02-15T08:10:00Z","models":["gpt-5"],"model_providers":{"gpt-5":"openai"},"agents":["assistant"],"error_count":0,"has_errors":false,"annotation_count":0}
+			],"missing_conversation_ids":[]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	inst, err := NewApp(context.Background(), backend.AppInstanceSettings{})
+	if err != nil {
+		t.Fatalf("new app: %s", err)
+	}
+	app := inst.(*App)
+	app.authzClient = newMockAuthzClient(allowAllSigilActions())
+	app.apiURL = upstream.URL
+	app.grafanaAppURL = upstream.URL
+	app.grafanaServiceAccountToken = "sa-token"
+	app.tempoDatasourceUID = "tempo"
+
+	response := callResourceWithAuth(t, app, &backend.CallResourceRequest{
+		Method: http.MethodPost,
+		Path:   "query/conversations/search",
+		Body:   []byte(`{"filters":"tool.name = \"rtm_editor\"","select":[],"time_range":{"from":"2025-02-15T07:00:00Z","to":"2025-02-15T10:00:00Z"},"page_size":10}`),
+	})
+	if response.Status != http.StatusOK {
+		t.Fatalf("expected status %d, got %d body=%s", http.StatusOK, response.Status, response.Body)
+	}
+	if searchRequests != 0 {
+		t.Fatalf("expected tool filters to bypass backend proxy, got %d backend requests", searchRequests)
+	}
+	if !strings.Contains(tempoQuery, `span.gen_ai.tool.name = "rtm_editor"`) {
+		t.Fatalf("expected tool filter in Tempo query, got %q", tempoQuery)
+	}
+	if !strings.Contains(tempoQuery, `span.gen_ai.operation.name = "execute_tool"`) {
+		t.Fatalf("expected execute_tool guard in Tempo query, got %q", tempoQuery)
+	}
+	if !bytes.Contains(response.Body, []byte(`"conversation_id":"conv-1"`)) {
+		t.Fatalf("expected local fallback result in response body, got %s", response.Body)
+	}
+}
+
 func TestCallResourceStreamsConversationSearchBypassesBackendProxyForRawTempoFilters(t *testing.T) {
 	streamRequests := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -5,6 +5,9 @@ import DashboardPage from './DashboardPage';
 import type { DashboardDataSource } from '../dashboard/api';
 import type { PrometheusQueryResponse } from '../dashboard/types';
 
+const mockDashboardToolsGrid = jest.fn<void, [unknown]>();
+const mockDashboardPerformanceGrid = jest.fn<void, [unknown]>();
+
 // ResizeObserver is not available in JSDOM.
 beforeAll(() => {
   global.ResizeObserver = class {
@@ -77,6 +80,20 @@ jest.mock('../components/landing/LandingTopBar', () => ({
   LandingTopBar: () => <div data-testid="landing-top-bar" />,
 }));
 
+jest.mock('../components/dashboard/DashboardToolsGrid', () => ({
+  DashboardToolsGrid: (props: unknown) => {
+    mockDashboardToolsGrid(props);
+    return <div data-testid="dashboard-tools-grid" />;
+  },
+}));
+
+jest.mock('../components/dashboard/DashboardPerformanceGrid', () => ({
+  DashboardPerformanceGrid: (props: unknown) => {
+    mockDashboardPerformanceGrid(props);
+    return <div data-testid="dashboard-performance-grid" />;
+  },
+}));
+
 const emptyVector: PrometheusQueryResponse = {
   status: 'success',
   data: { resultType: 'vector', result: [] },
@@ -119,6 +136,11 @@ function renderWithRouter(ds: MockDashboardDataSource, initialEntry = '/') {
 }
 
 describe('DashboardPage', () => {
+  beforeEach(() => {
+    mockDashboardToolsGrid.mockClear();
+    mockDashboardPerformanceGrid.mockClear();
+  });
+
   it('renders filter bar and paired metric rows', async () => {
     const ds = createDataSource();
     await act(async () => {
@@ -192,5 +214,50 @@ describe('DashboardPage', () => {
       );
       expect(hasModelBreakdown).toBe(true);
     });
+  });
+
+  it('renders the tools analytics tab', async () => {
+    const ds = createDataSource();
+    await act(async () => {
+      renderWithRouter(ds, '/?tab=tools');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dashboard-tools-grid')).toBeInTheDocument();
+    });
+  });
+
+  it('normalizes a stale model breakdown on the tools tab', async () => {
+    const ds = createDataSource();
+    await act(async () => {
+      renderWithRouter(ds, '/?tab=tools&breakdownBy=model');
+    });
+
+    await waitFor(() => {
+      expect(mockDashboardToolsGrid).toHaveBeenCalled();
+    });
+
+    expect(mockDashboardToolsGrid.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        breakdownBy: 'tool',
+      })
+    );
+  });
+
+  it('normalizes a stale tool breakdown on non-tools tabs', async () => {
+    const ds = createDataSource();
+    await act(async () => {
+      renderWithRouter(ds, '/?tab=performance&breakdownBy=tool');
+    });
+
+    await waitFor(() => {
+      expect(mockDashboardPerformanceGrid).toHaveBeenCalled();
+    });
+
+    expect(mockDashboardPerformanceGrid.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        breakdownBy: 'agent',
+      })
+    );
   });
 });

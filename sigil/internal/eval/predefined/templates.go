@@ -12,12 +12,6 @@ type Template struct {
 	Description string
 }
 
-func DeprecatedTemplateIDs() []string {
-	return []string{
-		"sigil.hallucination",
-	}
-}
-
 func Templates() []Template {
 	return []Template{
 		newLLMJudgeTemplate("sigil.helpfulness",

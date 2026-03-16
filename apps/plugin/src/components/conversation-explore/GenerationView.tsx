@@ -12,6 +12,7 @@ import {
 } from '../../generation/types';
 import type { ConversationSpan, SpanAttributes } from '../../conversation/types';
 import { getSelectionID } from '../../conversation/spans';
+import { toNum } from '../../conversation/aggregates';
 import { followupGeneration } from '../../conversation/api';
 import { humanizeMessageRole } from '../../conversation/messageParser';
 import { plugin } from '../../module';
@@ -435,22 +436,27 @@ function UsageChips({ generation }: { generation: GenerationDetail }) {
     return null;
   }
 
-  const input = u.input_tokens ?? 0;
-  const output = u.output_tokens ?? 0;
-  const cacheR = u.cache_read_input_tokens ?? 0;
-  const cacheW = u.cache_write_input_tokens ?? 0;
-  const reasoning = u.reasoning_tokens ?? 0;
-  const hasCache = cacheR > 0 || cacheW > 0;
+  const input = toNum(u.input_tokens);
+  const output = toNum(u.output_tokens);
+  const cacheRead = toNum(u.cache_read_input_tokens);
+  const cacheWrite = toNum(u.cache_write_input_tokens);
+  const totalIn = input + cacheRead + cacheWrite;
+  const reasoning = toNum(u.reasoning_tokens);
+
+  const hasCache = cacheRead > 0 || cacheWrite > 0;
+  const newIn = input + cacheWrite;
+  const cacheParts = hasCache
+    ? [cacheRead > 0 ? `${formatNumber(cacheRead)} cached` : '', newIn > 0 ? `${formatNumber(newIn)} new` : ''].filter(
+        Boolean
+      )
+    : [];
+  const cacheDetail = cacheParts.length > 0 ? ` (${cacheParts.join(' + ')})` : '';
 
   return (
     <span className={styles.usageChips}>
-      {`↓${formatNumber(input)}  ↑${formatNumber(output)}`}
-      {hasCache && (
-        <>
-          <span className={styles.usageSep}>│</span>
-          {`cache ↓${formatNumber(cacheR)}  ↑${formatNumber(cacheW)}`}
-        </>
-      )}
+      {`↓${formatNumber(totalIn)}`}
+      {cacheDetail && <span className={styles.usageDim}>{cacheDetail}</span>}
+      {`  ↑${formatNumber(output)}`}
       {reasoning > 0 && (
         <>
           <span className={styles.usageSep}>│</span>
@@ -971,8 +977,9 @@ export default function GenerationView({
   );
   const inputMessages = useMemo(() => gen?.input ?? [], [gen?.input]);
   const outputMessages = gen?.output ?? [];
-  const inputTokens = gen?.usage?.input_tokens ?? 0;
-  const outputTokens = gen?.usage?.output_tokens ?? 0;
+  const u = gen?.usage;
+  const inputSectionTokens = toNum(u?.input_tokens) + toNum(u?.cache_write_input_tokens);
+  const outputTokens = toNum(u?.output_tokens);
 
   const adjacent = useMemo(
     () => (gen ? findAdjacentGenerations(gen, allGenerations) : undefined),
@@ -1249,7 +1256,7 @@ export default function GenerationView({
         {currentTurn && currentTurn.messages.length > 0 && (
           <Section
             title="Input"
-            count={inputTokens > 0 ? `${formatNumber(inputTokens)} tokens` : undefined}
+            count={inputSectionTokens > 0 ? `${formatNumber(inputSectionTokens)} tokens` : undefined}
             tokenized={tokenizedSections['input']}
             onToggleTokenize={() => toggleSection('input')}
             autoEncoding={autoEncoding}

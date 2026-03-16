@@ -22,7 +22,7 @@ function emptyTokenSummary(): TokenSummary {
   };
 }
 
-function toFiniteTokenNumber(value: unknown): number {
+export function toNum(value: unknown): number {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : 0;
   }
@@ -38,15 +38,15 @@ function addUsageToSummary(summary: TokenSummary, gen: GenerationDetail): void {
   if (!u) {
     return;
   }
-  const inputTokens = toFiniteTokenNumber(u.input_tokens);
-  const outputTokens = toFiniteTokenNumber(u.output_tokens);
-  const cacheReadTokens = toFiniteTokenNumber(u.cache_read_input_tokens);
-  const cacheWriteTokens = toFiniteTokenNumber(u.cache_write_input_tokens);
+  const inputTokens = toNum(u.input_tokens);
+  const outputTokens = toNum(u.output_tokens);
+  const cacheReadTokens = toNum(u.cache_read_input_tokens);
+  const cacheWriteTokens = toNum(u.cache_write_input_tokens);
   summary.inputTokens += inputTokens;
   summary.outputTokens += outputTokens;
   summary.cacheReadTokens += cacheReadTokens;
   summary.cacheWriteTokens += cacheWriteTokens;
-  summary.reasoningTokens += toFiniteTokenNumber(u.reasoning_tokens);
+  summary.reasoningTokens += toNum(u.reasoning_tokens);
   summary.totalTokens += inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens;
 }
 

@@ -1,6 +1,6 @@
 import { createAssistantContextItem, type ChatContextItem } from '@grafana/assistant';
 import { sigilProjectContext } from './sigilProjectContext';
-import { getAllSpans, type TokenSummary, type CostSummary } from '../conversation/aggregates';
+import { getAllSpans, toNum, type TokenSummary, type CostSummary } from '../conversation/aggregates';
 import type { ConversationData, ConversationSpan } from '../conversation/types';
 import type { GenerationCostResult, GenerationDetail } from '../generation/types';
 import { getSpanType } from '../conversation/spans';
@@ -151,10 +151,10 @@ export function buildConversationAnalysisContext(input: ConversationContextInput
       output_tokens: gen.usage?.output_tokens ?? null,
       total_tokens:
         gen.usage != null
-          ? (gen.usage.input_tokens ?? 0) +
-            (gen.usage.output_tokens ?? 0) +
-            (gen.usage.cache_read_input_tokens ?? 0) +
-            (gen.usage.cache_write_input_tokens ?? 0)
+          ? toNum(gen.usage.input_tokens) +
+            toNum(gen.usage.output_tokens) +
+            toNum(gen.usage.cache_read_input_tokens) +
+            toNum(gen.usage.cache_write_input_tokens)
           : null,
       cost_usd: cost?.breakdown.totalCost ?? null,
       has_error: Boolean(gen.error?.message),

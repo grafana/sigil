@@ -24,6 +24,12 @@ var (
 	}, []string{"tenant_id", "endpoint", "method", "status_class"})
 )
 
+const (
+	controlUnknownLabel  = "unknown"
+	controlUnknownMethod = "UNKNOWN"
+	controlOtherMethod   = "OTHER"
+)
+
 type statusCapturingResponseWriter struct {
 	http.ResponseWriter
 	statusCode int
@@ -95,7 +101,7 @@ func controlTenantID(ctx context.Context) string {
 func controlEndpoint(endpoint string) string {
 	trimmed := strings.TrimSpace(endpoint)
 	if trimmed == "" {
-		return "unknown"
+		return controlUnknownLabel
 	}
 	return trimmed
 }
@@ -107,9 +113,9 @@ func controlMethod(method string) string {
 		http.MethodPatch, http.MethodDelete, http.MethodOptions:
 		return trimmed
 	case "":
-		return "UNKNOWN"
+		return controlUnknownMethod
 	default:
-		return "OTHER"
+		return controlOtherMethod
 	}
 }
 

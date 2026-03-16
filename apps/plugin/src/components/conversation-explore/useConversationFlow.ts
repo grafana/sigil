@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { ConversationData, ConversationSpan } from '../../conversation/types';
 import type { GenerationCostResult, GenerationDetail } from '../../generation/types';
 import { getSpanType, getSelectionID, hasError } from '../../conversation/spans';
+import { toNum } from '../../conversation/aggregates';
 import { getStringAttr } from '../../conversation/attributes';
 import type { FlowNode, FlowNodeKind } from './types';
 
@@ -127,9 +128,12 @@ function extractFlowNodes(
 
     if (kind !== null) {
       const gen = resolveGenerationForSpan(span, genIndex);
-      const totalTokens = gen?.usage?.total_tokens;
-      const inputTokens = gen?.usage?.input_tokens ?? 0;
-      const outputTokens = gen?.usage?.output_tokens ?? 0;
+      const totalTokens = toNum(gen?.usage?.total_tokens) || undefined;
+      const inputTokens =
+        toNum(gen?.usage?.input_tokens) +
+        toNum(gen?.usage?.cache_read_input_tokens) +
+        toNum(gen?.usage?.cache_write_input_tokens);
+      const outputTokens = toNum(gen?.usage?.output_tokens);
       const startMs = Number((span.startTimeUnixNano - conversationStartNs) / NS_PER_MS);
 
       const nodeId = getSelectionID(span);

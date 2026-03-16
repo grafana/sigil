@@ -20,6 +20,8 @@ export type FilterToolbarProps = {
   to: number;
   onTimeRangeChange: (timeRange: TimeRange) => void;
   onFiltersChange: (filters: DashboardFilters) => void;
+  hideProviderFilter?: boolean;
+  hideModelFilter?: boolean;
   hideLabelFilters?: boolean;
   fillWidth?: boolean;
   labelFilterOperators?: FilterOperator[];
@@ -43,6 +45,8 @@ export function FilterToolbar({
   to,
   onTimeRangeChange,
   onFiltersChange,
+  hideProviderFilter = false,
+  hideModelFilter = false,
   hideLabelFilters = false,
   fillWidth = false,
   labelFilterOperators = FILTER_OPERATORS,
@@ -69,12 +73,12 @@ export function FilterToolbar({
 
   const activeFilterCount = useMemo(() => {
     return (
-      filters.providers.length +
-      filters.models.length +
+      (hideProviderFilter ? 0 : filters.providers.length) +
+      (hideModelFilter ? 0 : filters.models.length) +
       filters.agentNames.length +
       filters.labelFilters.filter((lf) => lf.key && lf.value).length
     );
-  }, [filters]);
+  }, [filters, hideModelFilter, hideProviderFilter]);
   const completedLabelFilterCount = filters.labelFilters.filter((lf) => lf.key && lf.value).length;
   const hiddenLabelFilterCount = hideLabelFilters || !labelFilterRowOpen ? completedLabelFilterCount : 0;
 
@@ -180,30 +184,34 @@ export function FilterToolbar({
       <div className={fillWidth ? styles.filtersSectionFill : styles.filtersSection}>
         <div className={styles.filtersColumn}>
           <Stack direction="row" gap={1} alignItems="center" wrap="wrap">
-            <MultiSelect<string>
-              className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
-              options={providerSelectOptions}
-              value={filters.providers}
-              onChange={handleProviderChange}
-              onCreateOption={handleProviderCreate}
-              placeholder="Provider"
-              isClearable
-              allowCustomValue
-              isSearchable
-              width={fillWidth ? undefined : 'auto'}
-            />
-            <MultiSelect<string>
-              className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
-              options={modelSelectOptions}
-              value={filters.models}
-              onChange={handleModelChange}
-              onCreateOption={handleModelCreate}
-              placeholder="Model"
-              isClearable
-              allowCustomValue
-              isSearchable
-              width={fillWidth ? undefined : 'auto'}
-            />
+            {!hideProviderFilter && (
+              <MultiSelect<string>
+                className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
+                options={providerSelectOptions}
+                value={filters.providers}
+                onChange={handleProviderChange}
+                onCreateOption={handleProviderCreate}
+                placeholder="Provider"
+                isClearable
+                allowCustomValue
+                isSearchable
+                width={fillWidth ? undefined : 'auto'}
+              />
+            )}
+            {!hideModelFilter && (
+              <MultiSelect<string>
+                className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
+                options={modelSelectOptions}
+                value={filters.models}
+                onChange={handleModelChange}
+                onCreateOption={handleModelCreate}
+                placeholder="Model"
+                isClearable
+                allowCustomValue
+                isSearchable
+                width={fillWidth ? undefined : 'auto'}
+              />
+            )}
             <MultiSelect<string>
               className={fillWidth ? styles.multiSelectFill : styles.multiSelect}
               options={agentSelectOptions}

@@ -5,6 +5,7 @@ import {
   type FilterOperator,
   type LabelFilter,
 } from './types';
+import { buildExecuteToolMetricFilters, TOOL_METRIC_LABEL } from './toolRuntime';
 
 // OTel metric names converted to Prometheus format (dots → underscores).
 const TOKEN_USAGE = 'gen_ai_client_token_usage';
@@ -148,8 +149,31 @@ export function totalOpsQuery(
   return `sum${byClause(breakdown)}(increase(${OPERATION_DURATION}_count${sel(filters)}[${rangeDuration}]))`;
 }
 
-export function totalErrorsQuery(filters: DashboardFilters, rangeDuration: string): string {
-  return `sum(increase(${OPERATION_DURATION}_count${sel(filters, 'error_type!=""')}[${rangeDuration}]))`;
+export function totalErrorsQuery(
+  filters: DashboardFilters,
+  rangeDuration: string,
+  breakdown: BreakdownDimension = 'none'
+): string {
+  return `sum${byClause(breakdown)}(increase(${OPERATION_DURATION}_count${sel(filters, 'error_type!=""')}[${rangeDuration}]))`;
+}
+
+export function topToolExecutionsQuery(filters: DashboardFilters, rangeDuration: string): string {
+  return `sum by (${TOOL_METRIC_LABEL}) (increase(${OPERATION_DURATION}_count${sel(buildExecuteToolMetricFilters(filters))}[${rangeDuration}]))`;
+}
+
+export function topToolErrorsQuery(filters: DashboardFilters, rangeDuration: string): string {
+  return `sum by (${TOOL_METRIC_LABEL}) (increase(${OPERATION_DURATION}_count${sel(buildExecuteToolMetricFilters(filters), 'error_type!=""')}[${rangeDuration}]))`;
+}
+
+export function topToolErrorRateQuery(filters: DashboardFilters, rangeDuration: string): string {
+  const metricFilters = buildExecuteToolMetricFilters(filters);
+  const errors = `sum by (${TOOL_METRIC_LABEL}) (increase(${OPERATION_DURATION}_count${sel(metricFilters, 'error_type!=""')}[${rangeDuration}]))`;
+  const total = `sum by (${TOOL_METRIC_LABEL}) (increase(${OPERATION_DURATION}_count${sel(metricFilters)}[${rangeDuration}]))`;
+  return `(${errors} / ${total}) * 100`;
+}
+
+export function topToolLatencyQuery(filters: DashboardFilters, rangeDuration: string, quantile = 0.95): string {
+  return `histogram_quantile(${quantile}, sum by (le, ${TOOL_METRIC_LABEL}) (increase(${OPERATION_DURATION}_bucket${sel(buildExecuteToolMetricFilters(filters))}[${rangeDuration}])))`;
 }
 
 export function errorRateQuery(

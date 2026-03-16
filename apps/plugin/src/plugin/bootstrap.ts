@@ -57,7 +57,13 @@ export async function bootstrap<T extends KeyValue>(plugin: AppPlugin<T>): Promi
             type: 'histogram',
             unit: 'seconds',
             description: 'Latency of LLM generation calls. Use _bucket for percentiles, _count for throughput.',
-            key_labels: ['gen_ai_provider_name', 'gen_ai_request_model', 'gen_ai_agent_name', 'error_type'],
+            key_labels: [
+              'gen_ai_provider_name',
+              'gen_ai_request_model',
+              'gen_ai_tool_name',
+              'gen_ai_agent_name',
+              'error_type',
+            ],
             example_queries: [
               'histogram_quantile(0.95, sum by (le) (rate(gen_ai_client_operation_duration_seconds_bucket[5m])))',
               'sum(rate(gen_ai_client_operation_duration_seconds_count[5m]))',
@@ -77,6 +83,7 @@ export async function bootstrap<T extends KeyValue>(plugin: AppPlugin<T>): Promi
         common_label_names: {
           gen_ai_provider_name: 'LLM provider (e.g. openai, anthropic)',
           gen_ai_request_model: 'Model name (e.g. gpt-4o, claude-sonnet-4-20250514)',
+          gen_ai_tool_name: 'Tool name for execute_tool runtime metrics (e.g. weather, web_search)',
           gen_ai_agent_name: 'Agent or component name in the application',
           gen_ai_token_type: 'Token category: input, output, cache_read, cache_write',
           error_type: 'Error classification (empty string means success)',

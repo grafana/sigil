@@ -132,3 +132,11 @@ export const EvaluationTab = {
     showLabelFilters: false,
   },
 };
+
+export const ToolsTab = {
+  render: (args: StoryArgs) => <WithActiveFiltersWrapper {...args} />,
+  args: {
+    hideBreakdown: true,
+    hideProviderFilter: true,
+  },
+};

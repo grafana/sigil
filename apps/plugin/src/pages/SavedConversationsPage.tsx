@@ -135,6 +135,10 @@ export default function SavedConversationsPage({
           setNextCursor(resp.next_cursor || undefined);
           if (resp.total_count !== undefined) {
             setAllSavedCount(resp.total_count);
+          } else if (cursor === undefined) {
+            // First page with no total_count — use items.length as a floor so
+            // the sidebar shows at least how many conversations are on page 1.
+            setAllSavedCount(resp.items.length);
           }
           setAllSavedTotal(resp.total_count);
         } else {
@@ -196,6 +200,7 @@ export default function SavedConversationsPage({
     try {
       await Promise.all([...ids].map((id) => dataSource.deleteSavedConversation(id)));
       setSelectedIDs(new Set());
+      setPrevCursors([]);
       setAllSavedCount((prev) => Math.max(0, prev - ids.size));
       if (activeCollectionID) {
         setCollections((prev) =>
@@ -218,6 +223,7 @@ export default function SavedConversationsPage({
     try {
       await Promise.all([...ids].map((id) => dataSource.removeCollectionMember(activeCollectionID, id)));
       setSelectedIDs(new Set());
+      setPrevCursors([]);
       await loadConversations();
       setCollections((prev) =>
         prev.map((c) =>
@@ -232,6 +238,7 @@ export default function SavedConversationsPage({
   const handleSavedToCollection = async () => {
     setShowAddModal(false);
     setSelectedIDs(new Set());
+    setPrevCursors([]);
     // Refresh collections to update member counts
     fetchAllCollections(dataSource)
       .then((items) => setCollections(items))

@@ -3,6 +3,7 @@ import { css } from '@emotion/css';
 import type { GrafanaTheme2 } from '@grafana/data';
 import { Badge, Icon, LinkButton, Stack, Text, Tooltip, useStyles2 } from '@grafana/ui';
 import type { GenerationDetail } from '../../conversation/types';
+import { toNum } from '../../conversation/aggregates';
 
 export type GenerationHeaderProps = {
   generation: GenerationDetail;
@@ -68,6 +69,10 @@ export default function GenerationHeader({ generation }: GenerationHeaderProps) 
           .join('\n')
       : '';
 
+  const totalIn =
+    toNum(usage?.input_tokens) + toNum(usage?.cache_read_input_tokens) + toNum(usage?.cache_write_input_tokens);
+  const totalOut = toNum(usage?.output_tokens);
+
   return (
     <div className={styles.container}>
       <Badge text={modelLabel} color="blue" />
@@ -78,12 +83,12 @@ export default function GenerationHeader({ generation }: GenerationHeaderProps) 
 
       <div className={styles.separator} />
 
-      {usage != null && (usage.input_tokens != null || usage.output_tokens != null) && (
+      {usage != null && (totalIn > 0 || totalOut > 0) && (
         <Tooltip content={usageTooltip} placement="bottom">
           <Stack direction="row" gap={0.5} alignItems="center">
             <Icon name="dashboard" size="sm" />
             <span className={styles.tokenText}>
-              {usage.input_tokens ?? 0} in / {usage.output_tokens ?? 0} out
+              {totalIn} in / {totalOut} out
             </span>
           </Stack>
         </Tooltip>
