@@ -51,6 +51,40 @@ func TestTenantSettingsRoutesGetAndPut(t *testing.T) {
 	}
 }
 
+func TestTenantSettingsRoutesRejectInvalidDatasourcePayload(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "unknown field",
+			body: `{"datasources":{"prometheusDatasourceUID":"prom"},"unexpected":true}`,
+		},
+		{
+			name: "multiple json values",
+			body: `{"datasources":{"prometheusDatasourceUID":"prom"}}{"datasources":{"tempoDatasourceUID":"tempo"}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			protected := tenantauth.HTTPMiddleware(tenantauth.Config{Enabled: false, FakeTenantID: "fake"})
+			store := &tenantSettingsMemoryStore{}
+			svc := tenantsettings.NewService(store)
+			RegisterSettingsRoutes(mux, svc, protected)
+
+			req := httptest.NewRequest(http.MethodPut, "/api/v1/settings/datasources", bytes.NewBufferString(tt.body))
+			resp := httptest.NewRecorder()
+			mux.ServeHTTP(resp, req)
+
+			if resp.Code != http.StatusBadRequest {
+				t.Fatalf("expected PUT datasources 400, got %d body=%s", resp.Code, resp.Body.String())
+			}
+		})
+	}
+}
+
 type tenantSettingsMemoryStore struct {
 	settings map[string]tenantsettings.DatasourceSettings
 }
