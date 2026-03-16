@@ -505,6 +505,9 @@ func (s *Service) truncateCompactedWithRetry(
 		}
 		details := mysqlstorage.ClassifyError(err)
 		if !details.Retryable {
+			if ctx.Err() != nil {
+				return 0, limit, err
+			}
 			observeTruncateFailure(string(details.Class))
 			return 0, limit, newTruncateFailureError(err)
 		}
