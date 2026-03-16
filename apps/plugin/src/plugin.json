@@ -12,8 +12,8 @@
       "name": "Grafana"
     },
     "logos": {
-      "small": "img/logo.png",
-      "large": "img/logo.png"
+      "small": "img/logo-mono.png",
+      "large": "img/logo-mono.png"
     },
     "screenshots": [],
     "version": "%VERSION%",
