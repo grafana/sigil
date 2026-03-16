@@ -228,7 +228,7 @@ importers:
         specifier: ^1.2.16
         version: 1.2.24
       '@opencode-ai/sdk':
-        specifier: ^1.2.16
+        specifier: ^1.2.24
         version: 1.2.24
       '@types/node':
         specifier: ^24.0.0
