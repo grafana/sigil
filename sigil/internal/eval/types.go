@@ -280,9 +280,10 @@ func IsValidSavedConversationSource(s string) bool {
 }
 
 func ParseSavedConversationSource(s string) (SavedConversationSource, bool) {
-	switch SavedConversationSource(strings.TrimSpace(s)) {
+	v := SavedConversationSource(strings.TrimSpace(s))
+	switch v {
 	case SavedConversationSourceTelemetry, SavedConversationSourceManual:
-		return SavedConversationSource(strings.TrimSpace(s)), true
+		return v, true
 	default:
 		return "", false
 	}
