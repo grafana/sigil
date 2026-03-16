@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/grafana/dskit/tenant"
+	"github.com/grafana/sigil/sigil/internal/jsonutil"
 	"github.com/grafana/sigil/sigil/internal/tenantsettings"
 )
 
@@ -91,12 +92,5 @@ func decodeOptionalJSONBody(body io.Reader, payload any) error {
 		return err
 	}
 
-	var trailing json.RawMessage
-	if err := decoder.Decode(&trailing); err != nil {
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
-		return err
-	}
-	return errors.New("multiple json values")
+	return jsonutil.EnsureEOF(decoder)
 }
