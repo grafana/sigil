@@ -12,7 +12,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/grafana/dskit v0.0.0-20260312141034-c3cfcb4a37bc
 	github.com/minio/minio-go/v7 v7.0.99
-	github.com/openai/openai-go/v3 v3.26.0
+	github.com/openai/openai-go/v3 v3.28.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.41.0
