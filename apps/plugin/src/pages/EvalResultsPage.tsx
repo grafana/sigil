@@ -283,7 +283,12 @@ export default function EvalResultsPage({
       .map((k) => ({ label: k, value: k }));
   }, [scoreKeysQuery.data]);
 
-  const activeScoreKey = selectedScoreKey || (scoreKeyOptions.length > 0 ? scoreKeyOptions[0].value : '');
+  const activeScoreKey = useMemo(() => {
+    if (selectedScoreKey && scoreKeyOptions.some((opt) => opt.value === selectedScoreKey)) {
+      return selectedScoreKey;
+    }
+    return scoreKeyOptions.length > 0 ? scoreKeyOptions[0].value : '';
+  }, [selectedScoreKey, scoreKeyOptions]);
 
   const scoreValueDistribution = usePrometheusQuery(
     dataSource,
