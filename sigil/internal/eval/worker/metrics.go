@@ -106,7 +106,18 @@ func truncateLabel(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
-	return s[:maxLen]
+	runes := []rune(s)
+	result := make([]rune, 0, len(runes))
+	byteLen := 0
+	for _, r := range runes {
+		runeLen := len(string(r))
+		if byteLen+runeLen > maxLen {
+			break
+		}
+		result = append(result, r)
+		byteLen += runeLen
+	}
+	return string(result)
 }
 
 func boolLabel(value *bool) string {

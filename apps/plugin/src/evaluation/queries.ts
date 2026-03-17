@@ -257,8 +257,8 @@ export function scoreValueOverTimeQuery(
   return `sum by (score_value)(rate(${SCORE_VALUES_TOTAL}${scoreValueSelector(dashFilters, evalFilters, scoreKey)}[${interval}]))`;
 }
 
-export function categoricalScoreKeysQuery(): string {
-  return `count by (score_key)(${SCORE_VALUES_TOTAL})`;
+export function categoricalScoreKeysQuery(dashFilters: DashboardFilters, evalFilters: EvalFilters): string {
+  return `count by (score_key)(${SCORE_VALUES_TOTAL}${evalLabelSelector(dashFilters, evalFilters)})`;
 }
 
 export function evaluatorNamesQuery(): string {
