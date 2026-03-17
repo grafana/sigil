@@ -9,7 +9,17 @@ import (
 	"gorm.io/gorm"
 )
 
+// AutoMigrate runs WAL schema migrations under a MySQL advisory lock so that
+// concurrent microservice replicas do not stampede the database with parallel
+// DDL. The lock name is shared across all WAL-migrating targets (ingester,
+// compactor, eval-worker); only one proceeds at a time while the rest wait.
 func (s *WALStore) AutoMigrate(ctx context.Context) error {
+	return withMigrateLock(ctx, s.db, "sigil_wal_migrate", func() error {
+		return s.autoMigrateUnlocked(ctx)
+	})
+}
+
+func (s *WALStore) autoMigrateUnlocked(ctx context.Context) error {
 	start := time.Now()
 	migrator := s.db.WithContext(ctx).Migrator()
 
