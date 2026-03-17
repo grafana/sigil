@@ -20,7 +20,6 @@ import { hasResponseData } from '../components/insight/summarize';
 import {
   buildSigilAssistantContextItems,
   buildSigilAssistantPrompt,
-  withSigilProjectContextFallback,
 } from '../content/assistantContext';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../conversation/api';
