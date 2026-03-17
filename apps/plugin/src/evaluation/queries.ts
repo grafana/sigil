@@ -260,3 +260,7 @@ export function scoreValueOverTimeQuery(
 export function categoricalScoreKeysQuery(): string {
   return `count by (score_key)(${SCORE_VALUES_TOTAL})`;
 }
+
+export function evaluatorNamesQuery(): string {
+  return `count by (evaluator)(${SCORES_TOTAL})`;
+}

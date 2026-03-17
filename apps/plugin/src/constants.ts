@@ -31,3 +31,11 @@ export function buildAgentDetailByNameRoute(agentName: string): string {
 export function buildAnonymousAgentDetailRoute(): string {
   return ROUTES.AgentDetailAnonymous;
 }
+
+export function buildEvalResultsRoute(evaluator?: string): string {
+  const base = `${ROUTES.Evaluation}/results`;
+  if (!evaluator) {
+    return base;
+  }
+  return `${base}?evaluator=${encodeURIComponent(evaluator)}`;
+}

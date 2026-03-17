@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cx } from '@emotion/css';
 import { Button, Icon, Spinner, Toggletip, Tooltip, useStyles2 } from '@grafana/ui';
 import { getDataSourceSrv } from '@grafana/runtime';
+import { Link } from 'react-router-dom';
 import {
   formatScoreValue,
   type GenerationDetail,
@@ -17,6 +18,7 @@ import { followupGeneration } from '../../conversation/api';
 import { humanizeMessageRole } from '../../conversation/messageParser';
 import { plugin } from '../../module';
 import { buildAgentDetailHref } from '../dashboard/ViewAgentsLink';
+import { PLUGIN_BASE, buildEvalResultsRoute } from '../../constants';
 import type { FlowNode } from './types';
 import { getStyles } from './GenerationView.styles';
 import { renderTextWithXml } from './CollapsibleXml';
@@ -789,6 +791,7 @@ function ScoreChips({ scores }: { scores: Record<string, LatestScore> }) {
         const passed = score.passed;
         const chipClass =
           passed == null ? styles.scoreChipNeutral : passed ? styles.scoreChipPass : styles.scoreChipFail;
+        const resultsHref = `${PLUGIN_BASE}/${buildEvalResultsRoute(score.evaluator_id)}`;
 
         const chipContent = (
           <>
@@ -804,9 +807,9 @@ function ScoreChips({ scores }: { scores: Record<string, LatestScore> }) {
 
         if (!score.evaluator_description && !score.explanation) {
           return (
-            <div key={key} className={`${styles.scoreChip} ${chipClass}`}>
+            <Link key={key} to={resultsHref} className={`${styles.scoreChip} ${chipClass} ${styles.scoreChipLink}`}>
               {chipContent}
-            </div>
+            </Link>
           );
         }
 
@@ -824,7 +827,9 @@ function ScoreChips({ scores }: { scores: Record<string, LatestScore> }) {
             }
             placement="top"
           >
-            <div className={`${styles.scoreChip} ${chipClass}`}>{chipContent}</div>
+            <Link to={resultsHref} className={`${styles.scoreChip} ${chipClass} ${styles.scoreChipLink}`}>
+              {chipContent}
+            </Link>
           </Tooltip>
         );
       })}
