@@ -17,10 +17,7 @@ import { useFilterUrlState } from '../hooks/useFilterUrlState';
 import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
 import { hasResponseData } from '../components/insight/summarize';
-import {
-  buildSigilAssistantContextItems,
-  buildSigilAssistantPrompt,
-} from '../content/assistantContext';
+import { buildSigilAssistantContextItems, buildSigilAssistantPrompt } from '../content/assistantContext';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../conversation/api';
 import { LowestPassRateConversationsTable } from '../components/dashboard/LowestPassRateConversationsTable';
@@ -268,7 +265,13 @@ export default function EvalResultsPage({
   );
 
   // --- Score value distribution (string/bool evaluators) ---
-  const scoreKeysQuery = usePrometheusQuery(dataSource, categoricalScoreKeysQuery(dashFilters, evalFilters), from, to, 'instant');
+  const scoreKeysQuery = usePrometheusQuery(
+    dataSource,
+    categoricalScoreKeysQuery(dashFilters, evalFilters),
+    from,
+    to,
+    'instant'
+  );
   const scoreKeyOptions = useMemo(() => {
     if (!scoreKeysQuery.data || scoreKeysQuery.data.data.resultType !== 'vector') {
       return [];

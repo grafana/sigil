@@ -44,7 +44,7 @@ func TestTruncateLabel(t *testing.T) {
 		{
 			name:   "emoji not split (4-byte)",
 			input:  "test😀", // emoji is 4 bytes
-			maxLen: 5,        // "test" = 4 bytes, need 8 to include emoji
+			maxLen: 5,       // "test" = 4 bytes, need 8 to include emoji
 			want:   "test",
 		},
 		{
@@ -56,7 +56,7 @@ func TestTruncateLabel(t *testing.T) {
 		{
 			name:   "cjk not split (3-byte)",
 			input:  "abc中", // '中' is 3 bytes
-			maxLen: 4,       // "abc" = 3 bytes, need 6 to include '中'
+			maxLen: 4,      // "abc" = 3 bytes, need 6 to include '中'
 			want:   "abc",
 		},
 		{

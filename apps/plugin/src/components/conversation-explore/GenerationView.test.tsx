@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { GenerationDetail } from '../../generation/types';
 import type { ConversationSpan } from '../../conversation/types';
 import type { FlowNode } from './types';
@@ -60,7 +61,11 @@ describe('GenerationView', () => {
       children: [],
     };
 
-    render(<GenerationView node={node} allGenerations={[generation]} flowNodes={[]} onClose={jest.fn()} />);
+    render(
+      <MemoryRouter>
+        <GenerationView node={node} allGenerations={[generation]} flowNodes={[]} onClose={jest.fn()} />
+      </MemoryRouter>
+    );
 
     const chip = screen.getByText('sigil.quality').closest('div');
     expect(chip).not.toBeNull();
