@@ -208,13 +208,17 @@ func collectUpstreamGoSDKResolveCases(t *testing.T) []upstreamSDKResolveCase {
 	}
 
 	openAIAzureTestPath := filepath.Join(modCache, filepath.FromSlash("github.com/openai/openai-go/v3@"+openAIVersion), "azure/azure_test.go")
-	for _, model := range parseQuotedConstants(t, openAIAzureTestPath, `(?m)"model":"([^"]+)"`) {
-		appendCase("openai_go_sdk_azure", "azure-openai", model)
-		appendCase("openai_go_sdk_azure", "openai", model)
-	}
-	for _, model := range parseQuotedConstants(t, openAIAzureTestPath, `(?m)WriteField\("model", "([^"]+)"\)`) {
-		appendCase("openai_go_sdk_azure", "azure-openai", model)
-		appendCase("openai_go_sdk_azure", "openai", model)
+	if _, err := os.Stat(openAIAzureTestPath); err == nil {
+		for _, model := range parseQuotedConstants(t, openAIAzureTestPath, `(?m)"model":"([^"]+)"`) {
+			appendCase("openai_go_sdk_azure", "azure-openai", model)
+			appendCase("openai_go_sdk_azure", "openai", model)
+		}
+		for _, model := range parseQuotedConstants(t, openAIAzureTestPath, `(?m)WriteField\("model", "([^"]+)"\)`) {
+			appendCase("openai_go_sdk_azure", "azure-openai", model)
+			appendCase("openai_go_sdk_azure", "openai", model)
+		}
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat source file %s: %v", openAIAzureTestPath, err)
 	}
 
 	anthropicVersion := moduleVersionFromGoMod(t, filepath.Join(root, "sdks/go-providers/anthropic/go.mod"), "github.com/anthropics/anthropic-sdk-go")
