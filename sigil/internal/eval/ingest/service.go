@@ -143,6 +143,9 @@ func (s *Service) Export(ctx context.Context, tenantID string, request ExportSco
 			source = score.SourceKind
 		}
 		worker.ObserveScoreIngest(trimmedTenantID, source)
+		if sv, ok := score.Value.CategoricalLabel(); ok {
+			worker.ObserveProducedScoreValue(trimmedTenantID, score.EvaluatorID, "", score.RuleID, score.ScoreKey, score.Passed, sv, "", "", "", "")
+		}
 		response.Results = append(response.Results, result)
 		observeScoreIngestItem(trimmedTenantID, true, "none", transport)
 	}

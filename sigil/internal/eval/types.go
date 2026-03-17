@@ -2,6 +2,7 @@ package eval
 
 import (
 	"context"
+	"strconv"
 	"time"
 )
 
@@ -66,6 +67,19 @@ func (v ScoreValue) Type() ScoreType {
 		return ScoreTypeBool
 	default:
 		return ScoreTypeString
+	}
+}
+
+// CategoricalLabel returns the value as a string label for categorical
+// (string/bool) scores. Returns ("", false) for numeric scores.
+func (v ScoreValue) CategoricalLabel() (string, bool) {
+	switch {
+	case v.String != nil:
+		return *v.String, true
+	case v.Bool != nil:
+		return strconv.FormatBool(*v.Bool), true
+	default:
+		return "", false
 	}
 }
 

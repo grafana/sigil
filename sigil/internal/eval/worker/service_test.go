@@ -193,22 +193,69 @@ func TestServiceMetricsIncrementOnSuccess(t *testing.T) {
 
 	execBefore := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "success", "", "", "", ""))
 	scoreBefore := testutil.ToFloat64(evalScoresTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "k", "true", "", "", "", ""))
+	scoreValueBefore := testutil.ToFloat64(evalScoreValuesTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "k", "true", "true", "", "", "", ""))
 
 	service.runCycle(context.Background())
 
 	execAfter := testutil.ToFloat64(evalExecutionsTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "success", "", "", "", ""))
 	scoreAfter := testutil.ToFloat64(evalScoresTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "k", "true", "", "", "", ""))
+	scoreValueAfter := testutil.ToFloat64(evalScoreValuesTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "k", "true", "true", "", "", "", ""))
 	if execAfter-execBefore != 1 {
 		t.Fatalf("expected success execution counter increment by 1, got before=%f after=%f", execBefore, execAfter)
 	}
 	if scoreAfter-scoreBefore != 1 {
 		t.Fatalf("expected score counter increment by 1, got before=%f after=%f", scoreBefore, scoreAfter)
 	}
+	if scoreValueAfter-scoreValueBefore != 1 {
+		t.Fatalf("expected score value counter increment by 1, got before=%f after=%f", scoreValueBefore, scoreValueAfter)
+	}
 	if store.completed != 1 {
 		t.Fatalf("expected one completed item, got %d", store.completed)
 	}
 	if store.insertedScores != 1 {
 		t.Fatalf("expected one inserted score, got %d", store.insertedScores)
+	}
+}
+
+func TestServiceScoreValueMetricForStringScore(t *testing.T) {
+	store := &workerStoreStub{
+		claimed: []evalpkg.WorkItem{newClaimedItem("work-1", "gen-1")},
+		evaluators: map[string]evalpkg.EvaluatorDefinition{
+			"tenant-a|eval-1|v1": {
+				EvaluatorID: "eval-1",
+				Version:     "v1",
+				Kind:        evalpkg.EvaluatorKindHeuristic,
+				OutputKeys:  []evalpkg.OutputKey{{Key: "topic", Type: evalpkg.ScoreTypeString}},
+			},
+		},
+		statusCounts: defaultStatusCounts(),
+	}
+
+	service := newTestService(t, store, Config{
+		Enabled:          true,
+		MaxConcurrent:    1,
+		MaxRatePerMinute: 10000,
+		MaxAttempts:      3,
+		ClaimBatchSize:   10,
+		PollInterval:     time.Millisecond,
+	})
+	service.evaluators[evalpkg.EvaluatorKindHeuristic] = &workerFakeEvaluator{
+		kind:    evalpkg.EvaluatorKindHeuristic,
+		outputs: []evaluators.ScoreOutput{{Key: "topic", Type: evalpkg.ScoreTypeString, Value: evalpkg.StringValue("billing"), Passed: boolPtr(true)}},
+	}
+
+	before := testutil.ToFloat64(evalScoreValuesTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "topic", "true", "billing", "", "", "", ""))
+
+	service.runCycle(context.Background())
+
+	after := testutil.ToFloat64(evalScoreValuesTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "topic", "true", "billing", "", "", "", ""))
+	if after-before != 1 {
+		t.Fatalf("expected score value counter increment by 1 for string score, got before=%f after=%f", before, after)
+	}
+
+	numericBefore := testutil.ToFloat64(evalScoreValuesTotal.WithLabelValues("tenant-a", "eval-1", string(evalpkg.EvaluatorKindHeuristic), "rule-1", "topic", "true", "", "", "", "", ""))
+	if numericBefore != 0 {
+		t.Fatal("expected no score value counter for empty score_value label")
 	}
 }
 

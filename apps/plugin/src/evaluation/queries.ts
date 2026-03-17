@@ -2,6 +2,7 @@ import { escapePrometheusRegex } from '../dashboard/queries';
 import type { DashboardFilters } from '../dashboard/types';
 
 const SCORES_TOTAL = 'sigil_eval_scores_total';
+const SCORE_VALUES_TOTAL = 'sigil_eval_score_values_total';
 const EXECUTIONS_TOTAL = 'sigil_eval_executions_total';
 const DURATION_SECONDS = 'sigil_eval_duration_seconds';
 
@@ -228,4 +229,34 @@ export function failedExecutionsIncreaseQuery(
   breakdown: EvalBreakdownDimension = 'none'
 ): string {
   return `round(sum${byClause(breakdown)}(increase(${EXECUTIONS_TOTAL}${evalLabelSelector(dashFilters, evalFilters, 'status="failed"')}[${interval}])))`;
+}
+
+// ---------------------------------------------------------------------------
+// Score value distribution queries (for string/bool evaluators)
+// ---------------------------------------------------------------------------
+
+function scoreValueSelector(dashFilters: DashboardFilters, evalFilters: EvalFilters, scoreKey: string): string {
+  return evalLabelSelector(dashFilters, evalFilters, `score_key="${scoreKey}"`);
+}
+
+export function scoreValueDistributionQuery(
+  dashFilters: DashboardFilters,
+  evalFilters: EvalFilters,
+  scoreKey: string,
+  rangeDuration: string
+): string {
+  return `topk(20, sum by (score_value)(increase(${SCORE_VALUES_TOTAL}${scoreValueSelector(dashFilters, evalFilters, scoreKey)}[${rangeDuration}])))`;
+}
+
+export function scoreValueOverTimeQuery(
+  dashFilters: DashboardFilters,
+  evalFilters: EvalFilters,
+  scoreKey: string,
+  interval: string
+): string {
+  return `sum by (score_value)(rate(${SCORE_VALUES_TOTAL}${scoreValueSelector(dashFilters, evalFilters, scoreKey)}[${interval}]))`;
+}
+
+export function categoricalScoreKeysQuery(): string {
+  return `count by (score_key)(${SCORE_VALUES_TOTAL})`;
 }

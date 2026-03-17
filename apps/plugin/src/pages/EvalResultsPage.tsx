@@ -4,7 +4,7 @@ import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2 } 
 import { Button, Icon, Select, Text, useStyles2 } from '@grafana/ui';
 import { Link } from 'react-router-dom';
 import { type DashboardDataSource, defaultDashboardDataSource } from '../dashboard/api';
-import { type DashboardFilters, emptyFilters } from '../dashboard/types';
+import { type DashboardFilters, emptyFilters, type PrometheusVectorResult } from '../dashboard/types';
 import { computeStep, computeRateInterval, computeRangeDuration } from '../dashboard/queries';
 import { matrixToDataFrames, vectorToStatValue } from '../dashboard/transforms';
 import { BreakdownStatPanel, formatWindowLabel } from '../components/dashboard/dashboardShared';
@@ -32,6 +32,9 @@ import {
   passRateOverTimeQuery,
   scoresOverTimeQuery,
   evalDurationOverTimeQuery,
+  scoreValueDistributionQuery,
+  scoreValueOverTimeQuery,
+  categoricalScoreKeysQuery,
 } from '../evaluation/queries';
 
 export type EvalResultsPageProps = {
@@ -71,6 +74,7 @@ export default function EvalResultsPage({
   const { timeRange, filters, setTimeRange, setFilters } = useFilterUrlState();
   const [breakdownBy, setBreakdownBy] = useState<EvalBreakdownDimension>('evaluator');
   const [latencyPercentile, setLatencyPercentile] = useState<LatencyPercentile>('p95');
+  const [selectedScoreKey, setSelectedScoreKey] = useState<string>('');
 
   const evalFilters: EvalFilters = emptyEvalFilters;
   const dashFilters: DashboardFilters =
@@ -199,6 +203,37 @@ export default function EvalResultsPage({
   const durationTimeseries = usePrometheusQuery(
     dataSource,
     evalDurationOverTimeQuery(dashFilters, evalFilters, interval, breakdownBy, latencyQuantileMap[latencyPercentile]),
+    from,
+    to,
+    'range',
+    step
+  );
+
+  // --- Score value distribution (string/bool evaluators) ---
+  const scoreKeysQuery = usePrometheusQuery(dataSource, categoricalScoreKeysQuery(), from, to, 'instant');
+  const scoreKeyOptions = useMemo(() => {
+    if (!scoreKeysQuery.data || scoreKeysQuery.data.data.resultType !== 'vector') {
+      return [];
+    }
+    return (scoreKeysQuery.data.data.result as PrometheusVectorResult[])
+      .map((r) => r.metric.score_key)
+      .filter(Boolean)
+      .sort()
+      .map((k) => ({ label: k, value: k }));
+  }, [scoreKeysQuery.data]);
+
+  const activeScoreKey = selectedScoreKey || (scoreKeyOptions.length > 0 ? scoreKeyOptions[0].value : '');
+
+  const scoreValueDistribution = usePrometheusQuery(
+    dataSource,
+    activeScoreKey ? scoreValueDistributionQuery(dashFilters, evalFilters, activeScoreKey, rangeDuration) : '',
+    from,
+    to,
+    'instant'
+  );
+  const scoreValueTimeseries = usePrometheusQuery(
+    dataSource,
+    activeScoreKey ? scoreValueOverTimeQuery(dashFilters, evalFilters, activeScoreKey, interval) : '',
     from,
     to,
     'range',
@@ -493,7 +528,57 @@ export default function EvalResultsPage({
           />
         </div>
 
-        {/* Row 3: Lowest pass rate conversations */}
+        {/* Row 3: Score value distribution (string/bool evaluators) */}
+        {scoreKeyOptions.length > 0 && (
+          <>
+            <div className={styles.sectionHeader}>
+              <Text variant="h5">Score Values</Text>
+              <Select
+                options={scoreKeyOptions}
+                value={activeScoreKey || null}
+                onChange={(v) => {
+                  if (v.value) {
+                    setSelectedScoreKey(v.value);
+                  }
+                }}
+                prefix="Score Key"
+                width={32}
+              />
+            </div>
+            <div className={styles.panelRowWithStat}>
+              <MetricPanel
+                title="Value Trend"
+                pluginId="timeseries"
+                height={CHART_HEIGHT}
+                timeRange={timeRange}
+                onChangeTimeRange={handlePanelTimeRangeChange}
+                loading={scoreValueTimeseries.loading}
+                error={scoreValueTimeseries.error}
+                data={scoreValueTimeseries.data ? matrixToDataFrames(scoreValueTimeseries.data) : []}
+                options={{ legend: chartLegend, tooltip: tooltipOptions }}
+                fieldConfig={{
+                  defaults: {
+                    unit: 'short',
+                    color: consistentColor,
+                    custom: timeseriesDefaults,
+                    thresholds: noThresholds,
+                  },
+                  overrides: [],
+                }}
+              />
+              <BreakdownStatPanel
+                title="Value Distribution"
+                data={scoreValueDistribution.data}
+                loading={scoreValueDistribution.loading}
+                error={scoreValueDistribution.error}
+                breakdownLabel="score_value"
+                height={CHART_HEIGHT}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Row 4: Lowest pass rate conversations */}
         <LowestPassRateConversationsTable
           conversationsDataSource={conversationsDataSource}
           timeRange={timeRange}
@@ -540,6 +625,12 @@ function getStyles(theme: GrafanaTheme2) {
       padding: theme.spacing(6, 2),
       maxWidth: 480,
       margin: '0 auto',
+    }),
+    sectionHeader: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(2),
+      paddingTop: theme.spacing(1),
     }),
     emptyIcon: css({
       color: theme.colors.text.disabled,
