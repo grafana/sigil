@@ -312,6 +312,9 @@ func (s *Service) executeItem(ctx context.Context, item evalpkg.WorkItem) {
 	observeExecutionDuration(item.TenantID, item.EvaluatorID, kind, item.RuleID, time.Since(startedAt), evalModel, genModel, genProvider, agentName)
 	for _, score := range scores {
 		observeProducedScore(item.TenantID, item.EvaluatorID, kind, item.RuleID, score.ScoreKey, score.Passed, evalModel, genModel, genProvider, agentName)
+		if sv, ok := score.Value.CategoricalLabel(); ok {
+			ObserveProducedScoreValue(item.TenantID, item.EvaluatorID, kind, item.RuleID, score.ScoreKey, score.Passed, sv, evalModel, genModel, genProvider, agentName)
+		}
 	}
 }
 

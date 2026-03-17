@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
-import { Button, Field, Input, Select, Stack, Text, useStyles2 } from '@grafana/ui';
+import { Alert, Button, Field, Input, Select, Stack, Text, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import {
   EVALUATOR_KIND_LABELS,
@@ -703,17 +703,23 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
             />
           </Field>
           {kind === 'llm_judge' && effectiveOutputType === 'string' && (
-            <Field
-              label="Allowed values"
-              description="Optional. Comma-separated list of allowed string values. Enforced via structured output."
-            >
-              <Input
-                className={styles.fullWidthControl}
-                value={outputEnum}
-                onChange={(e) => setOutputEnum(e.currentTarget.value)}
-                placeholder="e.g. none, mild, moderate, severe"
-              />
-            </Field>
+            <>
+              <Field
+                label="Allowed values"
+                description="Optional. Comma-separated list of allowed string values. Enforced via structured output."
+              >
+                <Input
+                  className={styles.fullWidthControl}
+                  value={outputEnum}
+                  onChange={(e) => setOutputEnum(e.currentTarget.value)}
+                  placeholder="e.g. none, mild, moderate, severe"
+                />
+              </Field>
+              <Alert title="" severity="info">
+                String score values are tracked as metric labels for distribution analytics on the Results page. Define
+                a bounded set of allowed values to keep metric cardinality low.
+              </Alert>
+            </>
           )}
         </div>
       </div>

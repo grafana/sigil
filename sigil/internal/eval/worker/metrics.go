@@ -24,6 +24,10 @@ var (
 		Name: "sigil_eval_scores_total",
 		Help: "Scores emitted by evaluation workers partitioned by tenant, evaluator, kind, rule, key, pass/fail, eval model, generation model, provider, and agent.",
 	}, []string{"tenant_id", "evaluator", "evaluator_kind", "rule", "score_key", "passed", "eval_ai_request_model", "gen_ai_request_model", "gen_ai_request_provider", "gen_ai_agent_name"})
+	evalScoreValuesTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "sigil_eval_score_values_total",
+		Help: "Categorical score values emitted by evaluators (string and bool types only).",
+	}, []string{"tenant_id", "evaluator", "evaluator_kind", "rule", "score_key", "passed", "score_value", "eval_ai_request_model", "gen_ai_request_model", "gen_ai_request_provider", "gen_ai_agent_name"})
 	evalQueueDepth = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "sigil_eval_queue_depth",
 		Help: "Current evaluation queue depth partitioned by tenant and work-item status.",
@@ -89,6 +93,31 @@ func observeExecutionDuration(tenantID, evaluatorID, evaluatorKind, ruleID strin
 func observeProducedScore(tenantID, evaluatorID, evaluatorKind, ruleID, scoreKey string, passed *bool, evalModel, genModel, provider, agentName string) {
 	passedValue := boolLabel(passed)
 	evalScoresTotal.WithLabelValues(tenantID, evaluatorID, evaluatorKind, ruleID, scoreKey, passedValue, evalModel, genModel, provider, agentName).Inc()
+}
+
+const scoreValueLabelMaxLen = 64
+
+func ObserveProducedScoreValue(tenantID, evaluatorID, evaluatorKind, ruleID, scoreKey string, passed *bool, scoreValue, evalModel, genModel, provider, agentName string) {
+	passedLabel := boolLabel(passed)
+	evalScoreValuesTotal.WithLabelValues(tenantID, evaluatorID, evaluatorKind, ruleID, scoreKey, passedLabel, truncateLabel(scoreValue, scoreValueLabelMaxLen), evalModel, genModel, provider, agentName).Inc()
+}
+
+func truncateLabel(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	runes := []rune(s)
+	result := make([]rune, 0, len(runes))
+	byteLen := 0
+	for _, r := range runes {
+		runeLen := len(string(r))
+		if byteLen+runeLen > maxLen {
+			break
+		}
+		result = append(result, r)
+		byteLen += runeLen
+	}
+	return string(result)
 }
 
 func boolLabel(value *bool) string {

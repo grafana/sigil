@@ -2,9 +2,10 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { css } from '@emotion/css';
 import { dateTime, ThresholdsMode, type AbsoluteTimeRange, type GrafanaTheme2 } from '@grafana/data';
 import { Button, Icon, Select, Text, useStyles2 } from '@grafana/ui';
-import { Link } from 'react-router-dom';
+import { useAssistant } from '@grafana/assistant';
+import { Link, useSearchParams } from 'react-router-dom';
 import { type DashboardDataSource, defaultDashboardDataSource } from '../dashboard/api';
-import { type DashboardFilters, emptyFilters } from '../dashboard/types';
+import { type DashboardFilters, emptyFilters, type PrometheusVectorResult } from '../dashboard/types';
 import { computeStep, computeRateInterval, computeRangeDuration } from '../dashboard/queries';
 import { matrixToDataFrames, vectorToStatValue } from '../dashboard/transforms';
 import { BreakdownStatPanel, formatWindowLabel } from '../components/dashboard/dashboardShared';
@@ -16,6 +17,7 @@ import { useFilterUrlState } from '../hooks/useFilterUrlState';
 import { useCascadingFilterOptions } from '../hooks/useCascadingFilterOptions';
 import { PageInsightBar } from '../components/insight/PageInsightBar';
 import { hasResponseData } from '../components/insight/summarize';
+import { buildSigilAssistantContextItems, buildSigilAssistantPrompt } from '../content/assistantContext';
 import { PLUGIN_BASE, ROUTES } from '../constants';
 import { type ConversationsDataSource, defaultConversationsDataSource } from '../conversation/api';
 import { LowestPassRateConversationsTable } from '../components/dashboard/LowestPassRateConversationsTable';
@@ -32,6 +34,10 @@ import {
   passRateOverTimeQuery,
   scoresOverTimeQuery,
   evalDurationOverTimeQuery,
+  scoreValueDistributionQuery,
+  scoreValueOverTimeQuery,
+  categoricalScoreKeysQuery,
+  evaluatorNamesQuery,
 } from '../evaluation/queries';
 
 export type EvalResultsPageProps = {
@@ -69,10 +75,35 @@ export default function EvalResultsPage({
 }: EvalResultsPageProps) {
   const styles = useStyles2(getStyles);
   const { timeRange, filters, setTimeRange, setFilters } = useFilterUrlState();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [breakdownBy, setBreakdownBy] = useState<EvalBreakdownDimension>('evaluator');
   const [latencyPercentile, setLatencyPercentile] = useState<LatencyPercentile>('p95');
+  const [selectedScoreKey, setSelectedScoreKey] = useState<string>('');
+  const assistant = useAssistant();
 
-  const evalFilters: EvalFilters = emptyEvalFilters;
+  const selectedEvaluator = searchParams.get('evaluator') ?? '';
+  const setSelectedEvaluator = useCallback(
+    (evaluator: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (evaluator) {
+            next.set('evaluator', evaluator);
+          } else {
+            next.delete('evaluator');
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
+  const evalFilters: EvalFilters = useMemo(
+    () => (selectedEvaluator ? { ...emptyEvalFilters, evaluators: [selectedEvaluator] } : emptyEvalFilters),
+    [selectedEvaluator]
+  );
   const dashFilters: DashboardFilters =
     filters.providers.length || filters.models.length || filters.agentNames.length ? filters : emptyFilters;
 
@@ -85,6 +116,34 @@ export default function EvalResultsPage({
     from,
     to
   );
+
+  const evaluatorNamesResult = usePrometheusQuery(dataSource, evaluatorNamesQuery(), from, to, 'instant');
+  const evaluatorOptions = useMemo(() => {
+    if (!evaluatorNamesResult.data || evaluatorNamesResult.data.data.resultType !== 'vector') {
+      return [];
+    }
+    return (evaluatorNamesResult.data.data.result as PrometheusVectorResult[])
+      .map((r) => r.metric.evaluator)
+      .filter(Boolean)
+      .sort()
+      .map((name) => ({ label: name, value: name }));
+  }, [evaluatorNamesResult.data]);
+
+  const openDashboardAssistant = useCallback(() => {
+    const evaluatorClause = selectedEvaluator ? ` for the evaluator "${selectedEvaluator}"` : '';
+    const prompt = buildSigilAssistantPrompt(
+      `Build a Grafana dashboard for evaluation results${evaluatorClause}. Use the sigil_eval_scores_total, sigil_eval_executions_total, and sigil_eval_duration_seconds Prometheus metrics. Include panels for pass rate over time, score volume by evaluator, and evaluation duration percentiles. Use labels: evaluator, evaluator_kind, score_key, passed, gen_ai_request_model, gen_ai_request_provider, gen_ai_agent_name.`
+    );
+    if (assistant.openAssistant) {
+      assistant.openAssistant({
+        origin: 'sigil-plugin/eval-results-dashboard-builder',
+        prompt,
+        context: buildSigilAssistantContextItems(),
+        autoSend: true,
+      });
+      return;
+    }
+  }, [assistant, selectedEvaluator]);
 
   const handlePanelTimeRangeChange = useCallback(
     (abs: AbsoluteTimeRange) => {
@@ -205,6 +264,48 @@ export default function EvalResultsPage({
     step
   );
 
+  // --- Score value distribution (string/bool evaluators) ---
+  const scoreKeysQuery = usePrometheusQuery(
+    dataSource,
+    categoricalScoreKeysQuery(dashFilters, evalFilters),
+    from,
+    to,
+    'instant'
+  );
+  const scoreKeyOptions = useMemo(() => {
+    if (!scoreKeysQuery.data || scoreKeysQuery.data.data.resultType !== 'vector') {
+      return [];
+    }
+    return (scoreKeysQuery.data.data.result as PrometheusVectorResult[])
+      .map((r) => r.metric.score_key)
+      .filter(Boolean)
+      .sort()
+      .map((k) => ({ label: k, value: k }));
+  }, [scoreKeysQuery.data]);
+
+  const activeScoreKey = useMemo(() => {
+    if (selectedScoreKey && scoreKeyOptions.some((opt) => opt.value === selectedScoreKey)) {
+      return selectedScoreKey;
+    }
+    return scoreKeyOptions.length > 0 ? scoreKeyOptions[0].value : '';
+  }, [selectedScoreKey, scoreKeyOptions]);
+
+  const scoreValueDistribution = usePrometheusQuery(
+    dataSource,
+    activeScoreKey ? scoreValueDistributionQuery(dashFilters, evalFilters, activeScoreKey, rangeDuration) : '',
+    from,
+    to,
+    'instant'
+  );
+  const scoreValueTimeseries = usePrometheusQuery(
+    dataSource,
+    activeScoreKey ? scoreValueOverTimeQuery(dashFilters, evalFilters, activeScoreKey, interval) : '',
+    from,
+    to,
+    'range',
+    step
+  );
+
   // --- Build score volume chart data ---
   const scoresData = useMemo(() => {
     if (hasBreakdown) {
@@ -284,6 +385,7 @@ export default function EvalResultsPage({
       `Breakdown: ${breakdownBy}`,
       `Latency percentile: ${latencyPercentile}`,
       `Comparison label: ${comparisonLabel}`,
+      `Evaluator filter: ${selectedEvaluator || '(all)'}`,
       `Providers selected: ${filters.providers.join(', ') || '(all)'}`,
       `Models selected: ${filters.models.join(', ') || '(all)'}`,
       `Agents selected: ${filters.agentNames.join(', ') || '(all)'}`,
@@ -303,6 +405,7 @@ export default function EvalResultsPage({
     prevDurationValue,
     prevPassRateValue,
     prevTotalScoresValue,
+    selectedEvaluator,
     totalScoresValue,
     windowSize,
   ]);
@@ -359,6 +462,16 @@ export default function EvalResultsPage({
         fillWidth
       >
         <Select
+          options={evaluatorOptions}
+          value={selectedEvaluator || null}
+          onChange={(v) => setSelectedEvaluator(v?.value ?? '')}
+          placeholder="All evaluators"
+          prefix={selectedEvaluator ? 'Evaluator' : undefined}
+          isClearable
+          width={28}
+          loading={evaluatorNamesResult.loading}
+        />
+        <Select
           options={breakdownOptions}
           value={breakdownBy === 'none' ? null : breakdownBy}
           onChange={(v) => {
@@ -370,6 +483,15 @@ export default function EvalResultsPage({
           prefix={breakdownBy !== 'none' ? 'Breakdown by' : undefined}
           width={28}
         />
+        <Button
+          variant="secondary"
+          icon="ai"
+          size="md"
+          onClick={openDashboardAssistant}
+          tooltip="Build a dashboard with Assistant"
+        >
+          Build Dashboard
+        </Button>
       </FilterToolbar>
 
       <div className={styles.statsRow}>
@@ -493,7 +615,57 @@ export default function EvalResultsPage({
           />
         </div>
 
-        {/* Row 3: Lowest pass rate conversations */}
+        {/* Row 3: Score value distribution (string/bool evaluators) */}
+        {scoreKeyOptions.length > 0 && (
+          <>
+            <div className={styles.sectionHeader}>
+              <Text variant="h5">Score Values</Text>
+              <Select
+                options={scoreKeyOptions}
+                value={activeScoreKey || null}
+                onChange={(v) => {
+                  if (v.value) {
+                    setSelectedScoreKey(v.value);
+                  }
+                }}
+                prefix="Score Key"
+                width={32}
+              />
+            </div>
+            <div className={styles.panelRowWithStat}>
+              <MetricPanel
+                title="Value Trend"
+                pluginId="timeseries"
+                height={CHART_HEIGHT}
+                timeRange={timeRange}
+                onChangeTimeRange={handlePanelTimeRangeChange}
+                loading={scoreValueTimeseries.loading}
+                error={scoreValueTimeseries.error}
+                data={scoreValueTimeseries.data ? matrixToDataFrames(scoreValueTimeseries.data) : []}
+                options={{ legend: chartLegend, tooltip: tooltipOptions }}
+                fieldConfig={{
+                  defaults: {
+                    unit: 'short',
+                    color: consistentColor,
+                    custom: timeseriesDefaults,
+                    thresholds: noThresholds,
+                  },
+                  overrides: [],
+                }}
+              />
+              <BreakdownStatPanel
+                title="Value Distribution"
+                data={scoreValueDistribution.data}
+                loading={scoreValueDistribution.loading}
+                error={scoreValueDistribution.error}
+                breakdownLabel="score_value"
+                height={CHART_HEIGHT}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Row 4: Lowest pass rate conversations */}
         <LowestPassRateConversationsTable
           conversationsDataSource={conversationsDataSource}
           timeRange={timeRange}
@@ -540,6 +712,12 @@ function getStyles(theme: GrafanaTheme2) {
       padding: theme.spacing(6, 2),
       maxWidth: 480,
       margin: '0 auto',
+    }),
+    sectionHeader: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(2),
+      paddingTop: theme.spacing(1),
     }),
     emptyIcon: css({
       color: theme.colors.text.disabled,

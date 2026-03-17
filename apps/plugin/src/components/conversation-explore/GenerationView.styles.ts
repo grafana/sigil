@@ -567,6 +567,13 @@ export const getStyles = (theme: GrafanaTheme2) => ({
     color: theme.colors.error.text,
     fontWeight: theme.typography.fontWeightMedium,
   }),
+  scoreChipLink: css({
+    textDecoration: 'none',
+    cursor: 'pointer',
+    '&:hover': {
+      filter: 'brightness(0.92)',
+    },
+  }),
   tipSystemPrompt: css({
     whiteSpace: 'pre-wrap' as const,
     wordBreak: 'break-word' as const,
