@@ -483,7 +483,7 @@ run = "mise run test:ts:sdk-js-frameworks"
 description = "Run TypeScript/JavaScript SDK framework handler tests"
 depends = ["deps"]
 dir = "sdks/js"
-run = "pnpm run test:build && node --test test/frameworks.langchain.test.mjs test/frameworks.langgraph.test.mjs test/frameworks.additional.test.mjs test/frameworks.vercel-ai-sdk.mapping.test.mjs test/frameworks.vercel-ai-sdk.test.mjs"
+run = "pnpm run test:build && node --test test/frameworks.langchain.test.mjs test/frameworks.langgraph.test.mjs test/frameworks.additional.test.mjs test/frameworks.vercel-ai-sdk.mapping.test.mjs test/frameworks.vercel-ai-sdk.test.mjs test/frameworks.claude-agent-sdk.handler.test.mjs test/frameworks.claude-agent-sdk.mapper.test.mjs test/frameworks.claude-agent-sdk.wrapper.test.mjs"
 
 [tasks."test:py:sdk-core"]
 description = "Run Python SDK core parity tests"

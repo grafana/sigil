@@ -540,6 +540,7 @@ See `docs/references/grafana-query-response-shapes.md`.
   - OpenAI Agents + LlamaIndex in Python and TypeScript/JavaScript.
   - Google ADK in Python, TypeScript/JavaScript, Go, and Java.
   - Vercel AI SDK hooks in TypeScript/JavaScript.
+  - Claude Agent SDK wrapper/handler in TypeScript/JavaScript.
 - JS framework modules are exposed as subpath exports:
   - `@grafana/sigil-sdk-js/langchain`
   - `@grafana/sigil-sdk-js/langgraph`
@@ -547,6 +548,7 @@ See `docs/references/grafana-query-response-shapes.md`.
   - `@grafana/sigil-sdk-js/llamaindex`
   - `@grafana/sigil-sdk-js/google-adk`
   - `@grafana/sigil-sdk-js/vercel-ai-sdk`
+  - `@grafana/sigil-sdk-js/claude-agent-sdk`
 - Raw provider artifacts are default OFF, explicit opt-in only.
 - SDK validation enforces message role/part compatibility and artifact payload-or-record-id constraints.
 - Empty tool names return a no-op tool recorder (instrumentation safety behavior).
