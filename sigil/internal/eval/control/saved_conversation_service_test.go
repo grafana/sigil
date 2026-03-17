@@ -98,6 +98,22 @@ func (m *mockSavedConversationStore) ListSavedConversations(_ context.Context, t
 	return out, 0, nil
 }
 
+func (m *mockSavedConversationStore) CountSavedConversations(_ context.Context, tenantID, source string) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var count int64
+	for _, sc := range m.data {
+		if sc.TenantID != tenantID {
+			continue
+		}
+		if source != "" && string(sc.Source) != source {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
 func (m *mockSavedConversationStore) DeleteSavedConversation(_ context.Context, tenantID, savedID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

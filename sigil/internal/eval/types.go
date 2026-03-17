@@ -292,6 +292,10 @@ type SavedConversation struct {
 	SavedBy        string                  `json:"saved_by"`
 	CreatedAt      time.Time               `json:"created_at"`
 	UpdatedAt      time.Time               `json:"updated_at"`
+	// Enrichment fields populated from the conversations table when listing.
+	GenerationCount int      `json:"generation_count"`
+	TotalTokens     int64    `json:"total_tokens"`
+	AgentNames      []string `json:"agent_names"`
 }
 
 type SavedConversationStore interface {
@@ -299,6 +303,7 @@ type SavedConversationStore interface {
 	GetSavedConversation(ctx context.Context, tenantID, savedID string) (*SavedConversation, error)
 	GetSavedConversationByConversationID(ctx context.Context, tenantID, conversationID string) (*SavedConversation, error)
 	ListSavedConversations(ctx context.Context, tenantID string, source string, limit int, cursor uint64) ([]SavedConversation, uint64, error)
+	CountSavedConversations(ctx context.Context, tenantID string, source string) (int64, error)
 	DeleteSavedConversation(ctx context.Context, tenantID, savedID string) error
 }
 

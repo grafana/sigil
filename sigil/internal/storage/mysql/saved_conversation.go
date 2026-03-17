@@ -149,7 +149,30 @@ func (s *WALStore) ListSavedConversations(ctx context.Context, tenantID string, 
 		}
 		out = append(out, item)
 	}
+
+	if err := enrichSavedConversationsStats(ctx, s.db, tenantID, out); err != nil {
+		return nil, 0, err
+	}
+
 	return out, nextCursor, nil
+}
+
+func (s *WALStore) CountSavedConversations(ctx context.Context, tenantID string, source string) (int64, error) {
+	if strings.TrimSpace(tenantID) == "" {
+		return 0, errors.New("tenant id is required")
+	}
+
+	query := s.db.WithContext(ctx).Model(&EvalSavedConversationModel{}).
+		Where("tenant_id = ?", tenantID)
+	if strings.TrimSpace(source) != "" {
+		query = query.Where("source = ?", strings.TrimSpace(source))
+	}
+
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("count saved conversations: %w", err)
+	}
+	return count, nil
 }
 
 func (s *WALStore) DeleteSavedConversation(ctx context.Context, tenantID, savedID string) error {
@@ -163,6 +186,55 @@ func (s *WALStore) DeleteSavedConversation(ctx context.Context, tenantID, savedI
 	return s.db.WithContext(ctx).
 		Where("tenant_id = ? AND saved_id = ?", tenantID, savedID).
 		Delete(&EvalSavedConversationModel{}).Error
+}
+
+// enrichSavedConversationsStats fetches generation_count, total_tokens, and
+// agent_names from the conversations table for each item and populates the
+// enrichment fields in-place. Unknown conversation IDs are silently skipped.
+func enrichSavedConversationsStats(ctx context.Context, db *gorm.DB, tenantID string, items []evalpkg.SavedConversation) error {
+	if len(items) == 0 {
+		return nil
+	}
+	convIDs := make([]string, len(items))
+	for i, sc := range items {
+		convIDs[i] = sc.ConversationID
+	}
+
+	type statsRow struct {
+		ConversationID  string `gorm:"column:conversation_id"`
+		GenerationCount int    `gorm:"column:generation_count"`
+		TotalTokens     int64  `gorm:"column:total_tokens"`
+		AgentsJSON      string `gorm:"column:agents_json"`
+	}
+	var stats []statsRow
+	if err := db.WithContext(ctx).
+		Model(&ConversationModel{}).
+		Select("conversation_id, generation_count, total_tokens, agents_json").
+		Where("tenant_id = ? AND conversation_id IN ?", tenantID, convIDs).
+		Find(&stats).Error; err != nil {
+		return fmt.Errorf("enrich saved conversations stats: %w", err)
+	}
+
+	statsMap := make(map[string]statsRow, len(stats))
+	for _, s := range stats {
+		statsMap[s.ConversationID] = s
+	}
+
+	for i := range items {
+		s, ok := statsMap[items[i].ConversationID]
+		if !ok {
+			continue
+		}
+		items[i].GenerationCount = s.GenerationCount
+		items[i].TotalTokens = s.TotalTokens
+		if s.AgentsJSON != "" && s.AgentsJSON != "null" {
+			var agents []string
+			if err := json.Unmarshal([]byte(s.AgentsJSON), &agents); err == nil {
+				items[i].AgentNames = agents
+			}
+		}
+	}
+	return nil
 }
 
 func savedConversationModelToEntity(m EvalSavedConversationModel) (evalpkg.SavedConversation, error) {

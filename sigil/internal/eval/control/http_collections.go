@@ -107,11 +107,16 @@ func (s *CollectionService) handleCollectionRoutes(w http.ResponseWriter, req *h
 }
 
 func (s *CollectionService) handleCreateCollection(w http.ResponseWriter, req *http.Request, tenantID string) {
+	actorID, ok := actorIDFromRequest(w, req)
+	if !ok {
+		return
+	}
 	var body CreateCollectionRequest
 	if err := decodeJSONBody(req, &body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	body.CreatedBy = actorID
 	created, err := s.CreateCollection(req.Context(), tenantID, body)
 	if err != nil {
 		writeControlWriteError(w, err)
@@ -147,11 +152,16 @@ func (s *CollectionService) handleGetCollection(w http.ResponseWriter, req *http
 }
 
 func (s *CollectionService) handleUpdateCollection(w http.ResponseWriter, req *http.Request, tenantID, collectionID string) {
+	actorID, ok := actorIDFromRequest(w, req)
+	if !ok {
+		return
+	}
 	var body UpdateCollectionRequest
 	if err := decodeJSONBody(req, &body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	body.UpdatedBy = actorID
 	if err := s.UpdateCollection(req.Context(), tenantID, collectionID, body); err != nil {
 		writeControlWriteError(w, err)
 		return
@@ -173,11 +183,16 @@ func (s *CollectionService) handleDeleteCollection(w http.ResponseWriter, req *h
 }
 
 func (s *CollectionService) handleAddMembers(w http.ResponseWriter, req *http.Request, tenantID, collectionID string) {
+	actorID, ok := actorIDFromRequest(w, req)
+	if !ok {
+		return
+	}
 	var body AddMembersRequest
 	if err := decodeJSONBody(req, &body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	body.AddedBy = actorID
 	if err := s.AddMembers(req.Context(), tenantID, collectionID, body); err != nil {
 		writeControlWriteError(w, err)
 		return

@@ -8,6 +8,7 @@ export const ROUTES = {
   AnalyticsTool: 'analytics/tools/:toolName',
   Tutorial: 'tutorial',
   Conversations: 'conversations',
+  ConversationsSaved: 'conversations/saved',
   ConversationsExplore: 'conversations/:conversationID/explore',
   Agents: 'agents',
   AgentDetailByName: 'agents/name/:agentName',

@@ -37,6 +37,7 @@ This is the canonical navigation map for repository documentation.
   - Tokenizer visualization design: `design-docs/2026-03-05-tokenizer-visualization-design.md`
   - Evaluation resource user attribution (completed): `design-docs/2026-03-09-eval-resource-user-attribution.md`
   - Conversation detail V2 shared-ref payload (active): `design-docs/2026-03-10-conversation-detail-v2.md`
+  - Saved conversations collections page (active): `design-docs/2026-03-12-conv-saved-collections-page.md`
   - Agent and large-conversation latency spike (completed): `design-docs/2026-03-12-agent-and-large-conversation-latency-spike.md`
   - Tool runtime analytics page (active): `design-docs/2026-03-12-tool-runtime-analytics-page.md`
   - Compactor truncation failure spike (completed): `design-docs/2026-03-13-compactor-truncation-failure-spike.md`
@@ -78,6 +79,7 @@ This is the canonical navigation map for repository documentation.
   - Agent and large-conversation latency spike: `exec-plans/completed/2026-03-12-agent-and-large-conversation-latency-spike.md`
   - Tool runtime analytics page: `exec-plans/active/2026-03-12-tool-runtime-analytics-page.md`
   - SDK conformance harness: `exec-plans/active/2026-03-12-sdk-conformance-harness.md`
+  - Saved conversations collections page: `exec-plans/active/2026-03-12-conv-saved-collections-page.md`
   - Compactor truncation failure spike: `exec-plans/completed/2026-03-13-compactor-truncation-failure-spike.md`
   - Timeout and cancellation mitigation: `exec-plans/completed/2026-03-12-timeout-cancellation-mitigation.md`
   - LangChain/LangGraph framework integration delivery: `exec-plans/completed/2026-02-20-sdk-langchain-langgraph-integrations.md`

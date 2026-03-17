@@ -15,7 +15,7 @@ importers:
         version: 11.13.5
       '@grafana/assistant':
         specifier: ^0.1.21
-        version: 0.1.24(4d8ba404841e89dc7bd2898facc8a6e9)
+        version: 0.1.24(d2397e53b604cd40c3bddb7b690626c1)
       '@grafana/data':
         specifier: ^12.3.2
         version: 12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
@@ -27,7 +27,7 @@ importers:
         version: 12.4.1(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@grafana/scenes':
         specifier: ^7.0.3
-        version: 7.1.4(@babel/core@7.29.0)(@grafana/data@12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/e2e-selectors@12.4.1)(@grafana/i18n@12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/runtime@12.4.1(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/schema@12.4.1)(@grafana/ui@12.4.1(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-router-dom@7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
+        version: 7.1.7(@babel/core@7.29.0)(@grafana/data@12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/e2e-selectors@12.4.1)(@grafana/i18n@12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/runtime@12.4.1(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/schema@12.4.1)(@grafana/ui@12.4.1(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-router-dom@7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
       '@grafana/schema':
         specifier: ^12.3.2
         version: 12.4.1
@@ -228,13 +228,13 @@ importers:
         specifier: ^1.2.24
         version: 1.2.24
       '@opencode-ai/sdk':
-        specifier: ^1.2.16
+        specifier: ^1.2.24
         version: 1.2.24
       '@types/node':
         specifier: ^24.0.0
         version: 24.12.0
       esbuild:
-        specifier: ^0.27.0
+        specifier: ^0.27.3
         version: 0.27.3
       typescript:
         specifier: ^5.8.2
@@ -253,7 +253,7 @@ importers:
         version: 0.5.0(603f23204bccb1df895e42586aa55def)
       '@google/genai':
         specifier: ^1.41.0
-        version: 1.44.0(@modelcontextprotocol/sdk@1.27.1(@cfworker/json-schema@4.1.1)(zod@4.3.6))
+        version: 1.45.0(@modelcontextprotocol/sdk@1.27.1(@cfworker/json-schema@4.1.1)(zod@4.3.6))
       '@grpc/grpc-js':
         specifier: ^1.14.1
         version: 1.14.3
@@ -578,6 +578,10 @@ packages:
 
   '@babel/runtime@7.28.6':
     resolution: {integrity: sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/runtime@7.29.2':
+    resolution: {integrity: sha512-JiDShH45zKHWyGe4ZNVRrCjBz8Nh9TMmZG1kh4QTK8hCBTWBi8Da+i7s1fJw7/lYpM4ccepSNfqzZ/QvABBi5g==}
     engines: {node: '>=6.9.0'}
 
   '@babel/template@7.28.6':
@@ -1054,8 +1058,8 @@ packages:
       '@opentelemetry/sdk-trace-base': ^2.1.0
       '@opentelemetry/sdk-trace-node': ^2.1.0
 
-  '@google/genai@1.44.0':
-    resolution: {integrity: sha512-kRt9ZtuXmz+tLlcNntN/VV4LRdpl6ZOu5B1KbfNgfR65db15O6sUQcwnwLka8sT/V6qysD93fWrgJHF2L7dA9A==}
+  '@google/genai@1.45.0':
+    resolution: {integrity: sha512-+sNRWhKiRibVgc4OKi7aBJJ0A7RcoVD8tGG+eFkqxAWRjASDW+ktS9lLwTDnAxZICzCVoeAdu8dYLJVTX60N9w==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -1124,8 +1128,8 @@ packages:
       react: ^18.0.0
       react-dom: ^18.0.0
 
-  '@grafana/scenes@7.1.4':
-    resolution: {integrity: sha512-oyiAKeyTSzuZFdKVJS4C2ZLQJJVKDSwqR0u7dnVtPQ0hHs1QtHD1o98TPjhi6hy0wdmmSTAnADO4At2G/bBH+Q==}
+  '@grafana/scenes@7.1.7':
+    resolution: {integrity: sha512-iNY9fc8rAfWiQJXlLO78r8+6P5YL+2zsMBp23GvWXd53yk7SBDzr6yuK65qRAm7iyWkGfIVZ3H8/L5KDgI7GSg==}
     peerDependencies:
       '@grafana/data': '>=11.6'
       '@grafana/e2e-selectors': '>=11.6'
@@ -2534,8 +2538,8 @@ packages:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
-  '@tanstack/react-virtual@3.13.22':
-    resolution: {integrity: sha512-EaOrBBJLi3M0bTMQRjGkxLXRw7Gizwntoy5E2Q2UnSbML7Mo2a1P/Hfkw5tw9FLzK62bj34Jl6VNbQfRV6eJcA==}
+  '@tanstack/react-virtual@3.13.23':
+    resolution: {integrity: sha512-XnMRnHQ23piOVj2bzJqHrRrLg4r+F86fuBcwteKfbIjJrtGxb4z7tIvPVAe4B+4UVwo9G4Giuz5fmapcrnZ0OQ==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -2543,8 +2547,8 @@ packages:
   '@tanstack/virtual-core@3.13.21':
     resolution: {integrity: sha512-ww+fmLHyCbPSf7JNbWZP3g7wl6SdNo3ah5Aiw+0e9FDErkVHLKprYUrwTm7dF646FtEkN/KkAKPYezxpmvOjxw==}
 
-  '@tanstack/virtual-core@3.13.22':
-    resolution: {integrity: sha512-isuUGKsc5TAPDoHSbWTbl1SCil54zOS2MiWz/9GCWHPUQOvNTQx8qJEWC7UWR0lShhbK0Lmkcf0SZYxvch7G3g==}
+  '@tanstack/virtual-core@3.13.23':
+    resolution: {integrity: sha512-zSz2Z2HNyLjCplANTDyl3BcdQJc2k1+yyFoKhNRmCr7V7dY8o8q5m8uFTI1/Pg1kL+Hgrz6u3Xo6eFUB7l66cg==}
 
   '@testing-library/dom@10.4.1':
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
@@ -4423,11 +4427,11 @@ packages:
   fast-uri@3.1.0:
     resolution: {integrity: sha512-iPeeDKJSWf4IEOasVVrknXpaBV0IApz/gp7S2bb7Z4Lljbl2MGJRqInZiUrQwV16cpzw/D3S5j5Julj/gT52AA==}
 
-  fast-xml-builder@1.1.3:
-    resolution: {integrity: sha512-1o60KoFw2+LWKQu3IdcfcFlGTW4dpqEWmjhYec6H82AYZU2TVBXep6tMl8Z1Y+wM+ZrzCwe3BZ9Vyd9N2rIvmg==}
+  fast-xml-builder@1.1.4:
+    resolution: {integrity: sha512-f2jhpN4Eccy0/Uz9csxh3Nu6q4ErKxf0XIsasomfOihuSUa3/xw6w8dnOtCDgEItQFJG8KyXPzQXzcODDrrbOg==}
 
-  fast-xml-parser@5.5.5:
-    resolution: {integrity: sha512-NLY+V5NNbdmiEszx9n14mZBseJTC50bRq1VHsaxOmR72JDuZt+5J1Co+dC/4JPnyq+WrIHNM69r0sqf7BMb3Mg==}
+  fast-xml-parser@5.5.6:
+    resolution: {integrity: sha512-3+fdZyBRVg29n4rXP0joHthhcHdPUHaIC16cuyyd1iLsuaO6Vea36MPrxgAzbZna8lhvZeRL8Bc9GP56/J9xEw==}
     hasBin: true
 
   fast_array_intersect@1.1.0:
@@ -4603,6 +4607,10 @@ packages:
     resolution: {integrity: sha512-YGGyuEdVIjqxkxVH1pUTMY/XtmmsApXrCVv5EU25iX6inEPbV+VakJfLealkBtJN69AQmh1eGOdCl9Sm1UP6XQ==}
     engines: {node: '>=18'}
 
+  gaxios@7.1.4:
+    resolution: {integrity: sha512-bTIgTsM2bWn3XklZISBTQX7ZSddGW+IO3bMdGaemHZ3tbqExMENHLx6kKZ/KlejgrMtj8q7wBItt51yegqalrA==}
+    engines: {node: '>=18'}
+
   gcp-metadata@6.1.1:
     resolution: {integrity: sha512-a4tiq7E0/5fTjxPAaH4jpjkSv/uCaU2p5KC6HVGrvl0cDjA8iBZv4vv1gyzlmK0ZUKqwpOyQMKzZQe3lTit77A==}
     engines: {node: '>=14'}
@@ -4699,6 +4707,10 @@ packages:
 
   google-auth-library@10.6.1:
     resolution: {integrity: sha512-5awwuLrzNol+pFDmKJd0dKtZ0fPLAtoA5p7YO4ODsDu6ONJUVqbYwvv8y2ZBO5MBNp9TJXigB19710kYpBPdtA==}
+    engines: {node: '>=18'}
+
+  google-auth-library@10.6.2:
+    resolution: {integrity: sha512-e27Z6EThmVNNvtYASwQxose/G57rkRuaRbQyxM2bvYLLX/GqWZ5chWq2EBoUchJbCc57eC9ArzO5wMsEmWftCw==}
     engines: {node: '>=18'}
 
   google-auth-library@9.15.1:
@@ -8456,6 +8468,8 @@ snapshots:
 
   '@babel/runtime@7.28.6': {}
 
+  '@babel/runtime@7.29.2': {}
+
   '@babel/template@7.28.6':
     dependencies:
       '@babel/code-frame': 7.29.0
@@ -8603,7 +8617,7 @@ snapshots:
 
   '@emotion/react@11.10.5(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)':
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
       '@emotion/babel-plugin': 11.13.5
       '@emotion/cache': 11.14.0
       '@emotion/serialize': 1.3.3
@@ -8909,7 +8923,7 @@ snapshots:
       abort-controller: 3.0.0
       async-retry: 1.3.3
       duplexify: 4.1.3
-      fast-xml-parser: 5.5.5
+      fast-xml-parser: 5.5.6
       gaxios: 6.7.1(encoding@0.1.13)
       google-auth-library: 9.15.1(encoding@0.1.13)
       html-entities: 2.6.0
@@ -8928,7 +8942,7 @@ snapshots:
       '@google-cloud/opentelemetry-cloud-monitoring-exporter': 0.21.0(@opentelemetry/api@1.9.0)(@opentelemetry/core@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/resources@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.6.0(@opentelemetry/api@1.9.0))(encoding@0.1.13)
       '@google-cloud/opentelemetry-cloud-trace-exporter': 3.0.0(@opentelemetry/api@1.9.0)(@opentelemetry/core@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/resources@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.6.0(@opentelemetry/api@1.9.0))(encoding@0.1.13)
       '@google-cloud/storage': 7.19.0(encoding@0.1.13)
-      '@google/genai': 1.44.0(@modelcontextprotocol/sdk@1.27.1(@cfworker/json-schema@4.1.1)(zod@4.3.6))
+      '@google/genai': 1.45.0(@modelcontextprotocol/sdk@1.27.1(@cfworker/json-schema@4.1.1)(zod@4.3.6))
       '@mikro-orm/core': 6.6.8
       '@mikro-orm/mariadb': 6.6.8(@mikro-orm/core@6.6.8)(pg@8.19.0)
       '@mikro-orm/mssql': 6.6.8(@azure/core-client@1.10.1)(@mikro-orm/core@6.6.8)(mariadb@3.4.5)(pg@8.19.0)
@@ -8962,9 +8976,9 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@google/genai@1.44.0(@modelcontextprotocol/sdk@1.27.1(@cfworker/json-schema@4.1.1)(zod@4.3.6))':
+  '@google/genai@1.45.0(@modelcontextprotocol/sdk@1.27.1(@cfworker/json-schema@4.1.1)(zod@4.3.6))':
     dependencies:
-      google-auth-library: 10.6.1
+      google-auth-library: 10.6.2
       p-retry: 4.6.2
       protobufjs: 7.5.4
       ws: 8.19.0
@@ -8975,11 +8989,11 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@grafana/assistant@0.1.24(4d8ba404841e89dc7bd2898facc8a6e9)':
+  '@grafana/assistant@0.1.24(d2397e53b604cd40c3bddb7b690626c1)':
     dependencies:
       '@grafana/data': 12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@grafana/runtime': 12.4.1(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
-      '@grafana/scenes': 7.1.4(@babel/core@7.29.0)(@grafana/data@12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/e2e-selectors@12.4.1)(@grafana/i18n@12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/runtime@12.4.1(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/schema@12.4.1)(@grafana/ui@12.4.1(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-router-dom@7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
+      '@grafana/scenes': 7.1.7(@babel/core@7.29.0)(@grafana/data@12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/e2e-selectors@12.4.1)(@grafana/i18n@12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/runtime@12.4.1(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/schema@12.4.1)(@grafana/ui@12.4.1(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-router-dom@7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)
       '@grafana/schema': 12.4.1
       '@grafana/ui': 12.4.1(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       react: 19.2.4
@@ -9117,7 +9131,7 @@ snapshots:
       - supports-color
       - typescript
 
-  '@grafana/scenes@7.1.4(@babel/core@7.29.0)(@grafana/data@12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/e2e-selectors@12.4.1)(@grafana/i18n@12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/runtime@12.4.1(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/schema@12.4.1)(@grafana/ui@12.4.1(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-router-dom@7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)':
+  '@grafana/scenes@7.1.7(@babel/core@7.29.0)(@grafana/data@12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/e2e-selectors@12.4.1)(@grafana/i18n@12.4.1(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/runtime@12.4.1(@babel/core@7.29.0)(@openfeature/web-sdk@1.7.3(@openfeature/core@1.9.2))(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@grafana/schema@12.4.1)(@grafana/ui@12.4.1(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-router-dom@7.13.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(rxjs@7.8.2)':
     dependencies:
       '@emotion/css': 11.10.5(@babel/core@7.29.0)
       '@emotion/react': 11.10.5(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)
@@ -9129,7 +9143,7 @@ snapshots:
       '@grafana/schema': 12.4.1
       '@grafana/ui': 12.4.1(@babel/core@7.29.0)(@types/react@19.2.14)(eslint@10.0.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       '@leeoniya/ufuzzy': 1.0.19
-      '@tanstack/react-virtual': 3.13.22(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@tanstack/react-virtual': 3.13.23(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       history: 4.10.1
       lodash: 4.17.23
       react: 19.2.4
@@ -9313,7 +9327,7 @@ snapshots:
   '@jest/console@30.2.0':
     dependencies:
       '@jest/types': 30.2.0
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       chalk: 4.1.2
       jest-message-util: 30.2.0
       jest-util: 30.2.0
@@ -9394,7 +9408,7 @@ snapshots:
     dependencies:
       '@jest/types': 30.2.0
       '@sinonjs/fake-timers': 13.0.5
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       jest-message-util: 30.2.0
       jest-mock: 30.2.0
       jest-util: 30.2.0
@@ -9412,7 +9426,7 @@ snapshots:
 
   '@jest/pattern@30.0.1':
     dependencies:
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       jest-regex-util: 30.0.1
 
   '@jest/reporters@30.2.0':
@@ -9423,7 +9437,7 @@ snapshots:
       '@jest/transform': 30.2.0
       '@jest/types': 30.2.0
       '@jridgewell/trace-mapping': 0.3.31
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       chalk: 4.1.2
       collect-v8-coverage: 1.0.3
       exit-x: 0.2.2
@@ -9503,7 +9517,7 @@ snapshots:
       '@jest/schemas': 29.6.3
       '@types/istanbul-lib-coverage': 2.0.6
       '@types/istanbul-reports': 3.0.4
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       '@types/yargs': 17.0.35
       chalk: 4.1.2
 
@@ -10366,7 +10380,7 @@ snapshots:
 
   '@rc-component/overflow@1.0.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
       '@rc-component/resize-observer': 1.1.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@rc-component/util': 1.9.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       clsx: 2.1.1
@@ -10452,7 +10466,7 @@ snapshots:
 
   '@rc-component/virtual-list@1.0.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
       '@rc-component/resize-observer': 1.1.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@rc-component/util': 1.9.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       clsx: 2.1.1
@@ -10945,20 +10959,20 @@ snapshots:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@tanstack/react-virtual@3.13.22(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@tanstack/react-virtual@3.13.23(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
-      '@tanstack/virtual-core': 3.13.22
+      '@tanstack/virtual-core': 3.13.23
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
   '@tanstack/virtual-core@3.13.21': {}
 
-  '@tanstack/virtual-core@3.13.22': {}
+  '@tanstack/virtual-core@3.13.23': {}
 
   '@testing-library/dom@10.4.1':
     dependencies:
       '@babel/code-frame': 7.29.0
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
       '@types/aria-query': 5.0.4
       aria-query: 5.3.0
       dom-accessibility-api: 0.5.16
@@ -13071,13 +13085,13 @@ snapshots:
 
   fast-uri@3.1.0: {}
 
-  fast-xml-builder@1.1.3:
+  fast-xml-builder@1.1.4:
     dependencies:
       path-expression-matcher: 1.1.3
 
-  fast-xml-parser@5.5.5:
+  fast-xml-parser@5.5.6:
     dependencies:
-      fast-xml-builder: 1.1.3
+      fast-xml-builder: 1.1.4
       path-expression-matcher: 1.1.3
       strnum: 2.2.0
 
@@ -13286,6 +13300,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  gaxios@7.1.4:
+    dependencies:
+      extend: 3.0.2
+      https-proxy-agent: 7.0.6
+      node-fetch: 3.3.2
+    transitivePeerDependencies:
+      - supports-color
+
   gcp-metadata@6.1.1(encoding@0.1.13):
     dependencies:
       gaxios: 6.7.1(encoding@0.1.13)
@@ -13297,7 +13319,7 @@ snapshots:
 
   gcp-metadata@8.1.2:
     dependencies:
-      gaxios: 7.1.3
+      gaxios: 7.1.4
       google-logging-utils: 1.1.3
       json-bigint: 1.0.0
     transitivePeerDependencies:
@@ -13425,6 +13447,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  google-auth-library@10.6.2:
+    dependencies:
+      base64-js: 1.5.1
+      ecdsa-sig-formatter: 1.0.11
+      gaxios: 7.1.4
+      gcp-metadata: 8.1.2
+      google-logging-utils: 1.1.3
+      jws: 4.0.1
+    transitivePeerDependencies:
+      - supports-color
+
   google-auth-library@9.15.1(encoding@0.1.13):
     dependencies:
       base64-js: 1.5.1
@@ -13514,7 +13547,7 @@ snapshots:
 
   history@4.10.1:
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
       loose-envify: 1.4.0
       resolve-pathname: 3.0.0
       tiny-invariant: 1.3.3
@@ -13523,7 +13556,7 @@ snapshots:
 
   history@5.3.0:
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
 
   hoist-non-react-statics@3.3.2:
     dependencies:
@@ -13655,7 +13688,7 @@ snapshots:
 
   i18next@19.9.2:
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
 
   i18next@25.8.18(typescript@5.9.3):
     dependencies:
@@ -13973,7 +14006,7 @@ snapshots:
       '@jest/expect': 30.2.0
       '@jest/test-result': 30.2.0
       '@jest/types': 30.2.0
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       chalk: 4.1.2
       co: 4.6.0
       dedent: 1.7.1(babel-plugin-macros@3.1.0)
@@ -14114,7 +14147,7 @@ snapshots:
       '@jest/environment': 30.2.0
       '@jest/fake-timers': 30.2.0
       '@jest/types': 30.2.0
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       jest-mock: 30.2.0
       jest-util: 30.2.0
       jest-validate: 30.2.0
@@ -14122,7 +14155,7 @@ snapshots:
   jest-haste-map@30.2.0:
     dependencies:
       '@jest/types': 30.2.0
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       anymatch: 3.1.3
       fb-watchman: 2.0.2
       graceful-fs: 4.2.11
@@ -14195,7 +14228,7 @@ snapshots:
       '@jest/test-result': 30.2.0
       '@jest/transform': 30.2.0
       '@jest/types': 30.2.0
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       chalk: 4.1.2
       emittery: 0.13.1
       exit-x: 0.2.2
@@ -14224,7 +14257,7 @@ snapshots:
       '@jest/test-result': 30.2.0
       '@jest/transform': 30.2.0
       '@jest/types': 30.2.0
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       chalk: 4.1.2
       cjs-module-lexer: 2.2.0
       collect-v8-coverage: 1.0.3
@@ -14271,7 +14304,7 @@ snapshots:
   jest-util@29.7.0:
     dependencies:
       '@jest/types': 29.6.3
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
@@ -14299,7 +14332,7 @@ snapshots:
     dependencies:
       '@jest/test-result': 30.2.0
       '@jest/types': 30.2.0
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       emittery: 0.13.1
@@ -14321,7 +14354,7 @@ snapshots:
 
   jest-worker@30.2.0:
     dependencies:
-      '@types/node': 24.12.0
+      '@types/node': 24.11.0
       '@ungap/structured-clone': 1.3.0
       jest-util: 30.2.0
       merge-stream: 2.0.0
@@ -15532,7 +15565,7 @@ snapshots:
 
   rc-overflow@1.5.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
       classnames: 2.5.1
       rc-resize-observer: 1.4.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       rc-util: 5.44.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -15541,7 +15574,7 @@ snapshots:
 
   rc-resize-observer@1.4.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
       classnames: 2.5.1
       rc-util: 5.44.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
@@ -15550,7 +15583,7 @@ snapshots:
 
   rc-util@5.44.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
       react-is: 18.3.1
@@ -15788,7 +15821,7 @@ snapshots:
 
   react-select@5.10.2(@babel/core@7.29.0)(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
       '@emotion/cache': 11.14.0
       '@emotion/react': 11.10.5(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)
       '@floating-ui/dom': 1.7.6
@@ -16028,7 +16061,7 @@ snapshots:
 
   rtl-css-js@1.16.1:
     dependencies:
-      '@babel/runtime': 7.28.6
+      '@babel/runtime': 7.29.2
 
   run-applescript@7.1.0: {}
 

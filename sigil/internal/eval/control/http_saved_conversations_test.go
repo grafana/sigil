@@ -17,6 +17,13 @@ func newSavedConversationMux(svc *SavedConversationService) *http.ServeMux {
 	return mux
 }
 
+// withActor sets the identity headers required by actorIDFromRequest.
+func withActor(req *http.Request, actor string) *http.Request {
+	req.Header.Set(HeaderGrafanaUser, actor)
+	req.Header.Set(HeaderSigilTrustedActor, "true")
+	return req
+}
+
 func TestHTTPSavedConversationsRoundtrip(t *testing.T) {
 	store := newMockSavedConversationStore()
 	convLookup := newMockConversationLookup()
@@ -34,6 +41,7 @@ func TestHTTPSavedConversationsRoundtrip(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval/saved-conversations", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	withActor(req, "operator@example.com")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -57,12 +65,21 @@ func TestHTTPSavedConversationsRoundtrip(t *testing.T) {
 		t.Fatalf("list: expected 1 item, got %d", len(listResp.Items))
 	}
 
-	// Get
+	// Get — verify saved_by comes from identity header, not client body
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/eval/saved-conversations/sc-1", nil)
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("get: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var got struct {
+		SavedBy string `json:"saved_by"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("get: failed to decode response: %v", err)
+	}
+	if got.SavedBy != "operator@example.com" {
+		t.Fatalf("get: expected saved_by %q, got %q", "operator@example.com", got.SavedBy)
 	}
 
 	// Delete
@@ -106,6 +123,7 @@ func TestHTTPSavedConversationsManualCreate(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval/saved-conversations:manual", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	withActor(req, "user-1@example.com")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {

@@ -15,6 +15,9 @@ const savedConversations: SavedConversation[] = [
     saved_by: 'operator-jane',
     created_at: '2026-03-09T12:00:00Z',
     updated_at: '2026-03-09T12:00:00Z',
+    generation_count: 0,
+    total_tokens: 0,
+    agent_names: [],
   },
 ];
 

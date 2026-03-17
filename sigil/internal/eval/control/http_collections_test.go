@@ -32,6 +32,7 @@ func TestHTTPCollectionsCRUD(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/eval/collections", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	withActor(req, "user-1@example.com")
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -47,6 +48,10 @@ func TestHTTPCollectionsCRUD(t *testing.T) {
 	}
 	if created.Name != "Test Collection" {
 		t.Fatalf("create: expected name %q, got %q", "Test Collection", created.Name)
+	}
+	// created_by must come from the identity header, not the client-supplied field
+	if created.CreatedBy != "user-1@example.com" {
+		t.Fatalf("create: expected created_by %q, got %q", "user-1@example.com", created.CreatedBy)
 	}
 
 	collectionID := created.CollectionID
@@ -84,6 +89,7 @@ func TestHTTPCollectionsCRUD(t *testing.T) {
 	})
 	req = httptest.NewRequest(http.MethodPatch, "/api/v1/eval/collections/"+collectionID, bytes.NewReader(updateBody))
 	req.Header.Set("Content-Type", "application/json")
+	withActor(req, "user-2@example.com")
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -95,6 +101,10 @@ func TestHTTPCollectionsCRUD(t *testing.T) {
 	}
 	if updated.Name != "Updated Name" {
 		t.Fatalf("update: expected name %q, got %q", "Updated Name", updated.Name)
+	}
+	// updated_by must come from the identity header
+	if updated.UpdatedBy != "user-2@example.com" {
+		t.Fatalf("update: expected updated_by %q, got %q", "user-2@example.com", updated.UpdatedBy)
 	}
 
 	// Delete
