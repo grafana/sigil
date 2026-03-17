@@ -225,7 +225,7 @@ importers:
         specifier: workspace:*
         version: link:../../sdks/js
       '@opencode-ai/plugin':
-        specifier: ^1.2.16
+        specifier: ^1.2.24
         version: 1.2.24
       '@opencode-ai/sdk':
         specifier: ^1.2.24
