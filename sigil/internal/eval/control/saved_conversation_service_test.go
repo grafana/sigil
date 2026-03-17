@@ -652,6 +652,13 @@ func TestSavedConversationServiceListAndGet(t *testing.T) {
 		assert.Equal(t, evalpkg.SavedConversationSourceTelemetry, items[0].Source)
 	})
 
+	t.Run("list filtered by source with whitespace", func(t *testing.T) {
+		items, _, err := svc.ListSavedConversations(context.Background(), "tenant-1", " telemetry ", 100, 0)
+		require.NoError(t, err)
+		assert.Len(t, items, 1)
+		assert.Equal(t, evalpkg.SavedConversationSourceTelemetry, items[0].Source)
+	})
+
 	t.Run("list with invalid source", func(t *testing.T) {
 		_, _, err := svc.ListSavedConversations(context.Background(), "tenant-1", "unknown", 100, 0)
 		require.Error(t, err)

@@ -338,8 +338,12 @@ func (s *SavedConversationService) ListSavedConversations(ctx context.Context, t
 		return nil, 0, ValidationWrap(errors.New("tenant id is required"))
 	}
 	trimmedSource := strings.TrimSpace(source)
-	if trimmedSource != "" && !evalpkg.IsValidSavedConversationSource(trimmedSource) {
-		return nil, 0, ValidationWrap(fmt.Errorf("invalid source %q", trimmedSource))
+	if trimmedSource != "" {
+		parsedSource, ok := evalpkg.ParseSavedConversationSource(trimmedSource)
+		if !ok {
+			return nil, 0, ValidationWrap(fmt.Errorf("invalid source %q", trimmedSource))
+		}
+		trimmedSource = string(parsedSource)
 	}
 	return s.store.ListSavedConversations(ctx, trimmedTenantID, trimmedSource, limit, cursor)
 }
