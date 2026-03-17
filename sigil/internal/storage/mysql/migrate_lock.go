@@ -27,7 +27,7 @@ func withMigrateLock(ctx context.Context, db *gorm.DB, lockName string, fn func(
 	if err != nil {
 		return fmt.Errorf("acquire dedicated connection for migration lock %q: %w", lockName, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	timeoutSec := lockTimeoutSeconds(ctx)
 
