@@ -1,0 +1,64 @@
+name: Plugins - CD
+run-name: Deploy ${{ inputs.branch }} to ${{ inputs.environment }} by @${{ github.actor }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to publish from. Can be used to deploy PRs to dev
+        default: main
+      environment:
+        description: Environment to publish to
+        required: true
+        type: choice
+        options:
+          - 'dev'
+          - 'ops'
+          - 'prod'
+      deploy:
+        description: Deploy plugin to the selected Grafana Cloud environment
+        required: true
+        default: true
+        type: boolean
+
+permissions: {}
+
+jobs:
+  cd:
+    name: CD
+    uses: grafana/plugin-ci-workflows/.github/workflows/cd.yml@ci-cd-workflows/v5.1.0
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      pull-requests: read
+    with:
+      go-version: '1.25.5'
+      golangci-lint-version: '2.8.0'
+      go-setup-caching: true
+      plugin-directory: apps/plugin
+
+      branch: ${{ github.event.inputs.branch }}
+      environment: ${{ github.event.inputs.environment }}
+      # The plugin is only in Grafana Cloud, so don't publish plugin documentation in addition to the stuff published in the Grafana Cloud docs.
+      disable-docs-publishing: true
+
+      # disable playwright tests; since they are flaky right now
+      run-playwright: false
+
+      # Scope for the plugin published to the catalog. Setting this to "grafana_cloud" will make it visible only in Grafana Cloud
+      # (and hide it for on-prem). This is required for some provisioned plugins.
+      scopes: grafana_cloud
+
+      # Also deploy the plugin to Grafana Cloud via Argo. You also have to follow the Argo Workflows setup guide for this to work.
+      trigger-argo: ${{ fromJSON(github.event.inputs.deploy) }}
+      grafana-cloud-deployment-type: provisioned
+      argo-workflow-slack-channel: '#sigil-deploys'
+
+      # Publish the plugin as 'pending' so it doesn't appear in the catalog unless provisioned,
+      # since it won't work without the provisioning data.
+      publish-to-catalog-as-pending: true
+
+      # Don't publish as a draft release, because who can remember to actually convert the draft
+      # to a real release?
+      github-draft-release: false
