@@ -31,6 +31,14 @@ function spanTypeToKind(spanType: string): FlowNodeKind | null {
   }
 }
 
+function computeTokenCount(usage: GenerationDetail['usage'] | undefined): number | undefined {
+  const totalTokens = toNum(usage?.total_tokens) || undefined;
+  const inputTokens =
+    toNum(usage?.input_tokens) + toNum(usage?.cache_read_input_tokens) + toNum(usage?.cache_write_input_tokens);
+  const outputTokens = toNum(usage?.output_tokens);
+  return totalTokens ?? (inputTokens + outputTokens || undefined);
+}
+
 type GenerationIndex = {
   byTraceSpan: Map<string, GenerationDetail>;
   byGenId: Map<string, GenerationDetail>;
@@ -132,12 +140,6 @@ function extractFlowNodes(
       if (gen && matchedGenIds) {
         matchedGenIds.add(gen.generation_id);
       }
-      const totalTokens = toNum(gen?.usage?.total_tokens) || undefined;
-      const inputTokens =
-        toNum(gen?.usage?.input_tokens) +
-        toNum(gen?.usage?.cache_read_input_tokens) +
-        toNum(gen?.usage?.cache_write_input_tokens);
-      const outputTokens = toNum(gen?.usage?.output_tokens);
       const startMs = Number((span.startTimeUnixNano - conversationStartNs) / NS_PER_MS);
 
       const nodeId = getSelectionID(span);
@@ -152,7 +154,7 @@ function extractFlowNodes(
         status: hasError(span) || gen?.error?.message ? 'error' : 'success',
         model: gen?.model?.name,
         provider: gen?.model?.provider,
-        tokenCount: totalTokens ?? (inputTokens + outputTokens || undefined),
+        tokenCount: computeTokenCount(gen?.usage),
         generation: gen,
         span,
         children: [...childNodes, ...toolCallChildren],
@@ -196,13 +198,6 @@ function buildSyntheticNodes(
       continue;
     }
 
-    const totalTokens = toNum(gen.usage?.total_tokens) || undefined;
-    const inputTokens =
-      toNum(gen.usage?.input_tokens) +
-      toNum(gen.usage?.cache_read_input_tokens) +
-      toNum(gen.usage?.cache_write_input_tokens);
-    const outputTokens = toNum(gen.usage?.output_tokens);
-
     const createdMs = parseCreatedAtMs(gen);
     const startMs = createdMs !== undefined ? Math.max(0, createdMs - conversationStartMs) : 0;
     const nodeId = `gen::${gen.generation_id}`;
@@ -217,7 +212,7 @@ function buildSyntheticNodes(
       status: gen.error?.message ? 'error' : 'success',
       model: gen.model?.name,
       provider: gen.model?.provider,
-      tokenCount: totalTokens ?? (inputTokens + outputTokens || undefined),
+      tokenCount: computeTokenCount(gen.usage),
       generation: gen,
       children: toolCallChildren,
     });
