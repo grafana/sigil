@@ -117,17 +117,21 @@ function extractToolCallChildren(gen: GenerationDetail, parentNodeId: string, pa
 function extractFlowNodes(
   spans: ConversationSpan[],
   conversationStartNs: bigint,
-  genIndex: GenerationIndex
+  genIndex: GenerationIndex,
+  matchedGenIds?: Set<string>
 ): FlowNode[] {
   const result: FlowNode[] = [];
 
   for (const span of spans) {
     const type = getSpanType(span);
     const kind = spanTypeToKind(type);
-    const childNodes = extractFlowNodes(span.children, conversationStartNs, genIndex);
+    const childNodes = extractFlowNodes(span.children, conversationStartNs, genIndex, matchedGenIds);
 
     if (kind !== null) {
       const gen = resolveGenerationForSpan(span, genIndex);
+      if (gen && matchedGenIds) {
+        matchedGenIds.add(gen.generation_id);
+      }
       const totalTokens = toNum(gen?.usage?.total_tokens) || undefined;
       const inputTokens =
         toNum(gen?.usage?.input_tokens) +
@@ -159,6 +163,90 @@ function extractFlowNodes(
   }
 
   return result;
+}
+
+function generationLabel(gen: GenerationDetail): string {
+  const parts: string[] = [];
+  if (gen.agent_name) {
+    parts.push(gen.agent_name);
+  }
+  if (gen.model?.name) {
+    parts.push(gen.model.name);
+  }
+  return parts.join(' · ') || 'generation';
+}
+
+function parseCreatedAtMs(gen: GenerationDetail): number | undefined {
+  if (!gen.created_at) {
+    return undefined;
+  }
+  const ms = Date.parse(gen.created_at);
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
+function buildSyntheticNodes(
+  generations: GenerationDetail[],
+  matchedGenIds: Set<string>,
+  conversationStartMs: number
+): FlowNode[] {
+  const nodes: FlowNode[] = [];
+
+  for (const gen of generations) {
+    if (matchedGenIds.has(gen.generation_id)) {
+      continue;
+    }
+
+    const totalTokens = toNum(gen.usage?.total_tokens) || undefined;
+    const inputTokens =
+      toNum(gen.usage?.input_tokens) +
+      toNum(gen.usage?.cache_read_input_tokens) +
+      toNum(gen.usage?.cache_write_input_tokens);
+    const outputTokens = toNum(gen.usage?.output_tokens);
+
+    const createdMs = parseCreatedAtMs(gen);
+    const startMs = createdMs !== undefined ? Math.max(0, createdMs - conversationStartMs) : 0;
+    const nodeId = `gen::${gen.generation_id}`;
+    const toolCallChildren = extractToolCallChildren(gen, nodeId, startMs);
+
+    nodes.push({
+      id: nodeId,
+      kind: 'generation',
+      label: generationLabel(gen),
+      durationMs: 0,
+      startMs,
+      status: gen.error?.message ? 'error' : 'success',
+      model: gen.model?.name,
+      provider: gen.model?.provider,
+      tokenCount: totalTokens ?? (inputTokens + outputTokens || undefined),
+      generation: gen,
+      children: toolCallChildren,
+    });
+  }
+
+  return nodes;
+}
+
+function findGenerationTimeRangeMs(generations: GenerationDetail[]): { startMs: number; endMs: number } | null {
+  let min: number | undefined;
+  let max: number | undefined;
+
+  for (const gen of generations) {
+    const ms = parseCreatedAtMs(gen);
+    if (ms === undefined) {
+      continue;
+    }
+    if (min === undefined || ms < min) {
+      min = ms;
+    }
+    if (max === undefined || ms > max) {
+      max = ms;
+    }
+  }
+
+  if (min === undefined || max === undefined) {
+    return null;
+  }
+  return { startMs: min, endMs: max };
 }
 
 function getAgentName(node: FlowNode): string {
@@ -287,20 +375,46 @@ export function useConversationFlow(
   const { groupBy, sortBy } = options ?? DEFAULT_OPTIONS;
 
   return useMemo(() => {
-    if (!data || data.spans.length === 0) {
+    if (!data) {
       return { flowNodes: [], totalDurationMs: 0 };
     }
 
     const genIndex = buildGenerationIndex(allGenerations);
-    const startNs = findConversationStartNs(data.spans);
-    const flatNodes = extractFlowNodes(data.spans, startNs, genIndex);
+    const matchedGenIds = new Set<string>();
+
+    const spanStartNs = data.spans.length > 0 ? findConversationStartNs(data.spans) : null;
+    const genTimeRange = findGenerationTimeRangeMs(allGenerations);
+
+    let conversationStartMs: number;
+    if (spanStartNs !== null && genTimeRange !== null) {
+      const spanStartMs = Number(spanStartNs / NS_PER_MS);
+      conversationStartMs = Math.min(spanStartMs, genTimeRange.startMs);
+    } else if (spanStartNs !== null) {
+      conversationStartMs = Number(spanStartNs / NS_PER_MS);
+    } else if (genTimeRange !== null) {
+      conversationStartMs = genTimeRange.startMs;
+    } else {
+      conversationStartMs = 0;
+    }
+
+    const conversationStartNs = BigInt(conversationStartMs) * NS_PER_MS;
+
+    let spanNodes: FlowNode[] = [];
+    if (data.spans.length > 0) {
+      spanNodes = extractFlowNodes(data.spans, conversationStartNs, genIndex, matchedGenIds);
+    }
+
+    const syntheticNodes = buildSyntheticNodes(allGenerations, matchedGenIds, conversationStartMs);
+
+    const flatNodes = [...spanNodes, ...syntheticNodes];
     const sorted = sortNodes(flatNodes, sortBy, generationCosts);
     const flowNodes = groupNodesBy(sorted, groupBy);
 
     const allLeaves = flattenFlowNodes(flowNodes);
-    const maxEnd = allLeaves.reduce((max, n) => Math.max(max, n.startMs + n.durationMs), 0);
+    const spanMaxEnd = allLeaves.reduce((max, n) => Math.max(max, n.startMs + n.durationMs), 0);
+    const totalDurationMs = spanMaxEnd > 0 ? spanMaxEnd : genTimeRange ? genTimeRange.endMs - genTimeRange.startMs : 0;
 
-    return { flowNodes, totalDurationMs: maxEnd };
+    return { flowNodes, totalDurationMs };
   }, [data, allGenerations, groupBy, sortBy, generationCosts]);
 }
 

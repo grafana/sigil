@@ -218,7 +218,7 @@ export default function FlowNodeRow({
           <span className={cx(styles.label, styles.agentLabel)}>
             <HighlightMatch text={node.label} query={searchQuery} />
           </span>
-          <span className={styles.duration}>{formatDuration(node.durationMs)}</span>
+          {node.durationMs > 0 && <span className={styles.duration}>{formatDuration(node.durationMs)}</span>}
           {node.status === 'error' && <span className={cx(styles.statusDot, styles.statusError)} />}
         </div>
         {expanded && hasChildren && (
@@ -316,7 +316,7 @@ export default function FlowNodeRow({
             {formatCostUsd(costResult.breakdown.totalCost)}
           </span>
         )}
-        {!isToolCall && (
+        {!isToolCall && node.durationMs > 0 && (
           <span
             className={cx(
               styles.duration,
