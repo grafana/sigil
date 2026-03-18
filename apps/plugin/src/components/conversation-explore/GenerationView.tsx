@@ -1231,7 +1231,7 @@ export default function GenerationView({
           <div className={styles.attributeSummaryRow}>
             {gen?.usage && <UsageChips generation={gen} />}
             {modelName && <span className={styles.attributeModeChip}>{modelName}</span>}
-            <span className={styles.attributeModeChip}>{formatDuration(node.durationMs)}</span>
+            {node.durationMs > 0 && <span className={styles.attributeModeChip}>{formatDuration(node.durationMs)}</span>}
           </div>
         )}
 
@@ -1244,7 +1244,9 @@ export default function GenerationView({
               <div className={styles.attributeSummaryRow}>
                 {gen?.usage && <UsageChips generation={gen} />}
                 {modelName && <span className={styles.attributeModeChip}>{modelName}</span>}
-                <span className={styles.attributeModeChip}>{formatDuration(node.durationMs)}</span>
+                {node.durationMs > 0 && (
+                  <span className={styles.attributeModeChip}>{formatDuration(node.durationMs)}</span>
+                )}
               </div>
             }
           >

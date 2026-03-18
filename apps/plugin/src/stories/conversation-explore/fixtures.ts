@@ -492,6 +492,201 @@ export const mockGenerationsWithXml: GenerationDetail[] = [
   },
 ];
 
+export const mockSyntheticGenerations: GenerationDetail[] = [
+  {
+    generation_id: 'gen-syn-1',
+    conversation_id: 'conv-syn-1',
+    mode: 'SYNC',
+    model: { provider: 'anthropic', name: 'claude-sonnet-4-5' },
+    agent_name: 'travel-planner',
+    input: [
+      {
+        role: 'MESSAGE_ROLE_USER',
+        parts: [{ text: 'Plan a weekend trip to Portland, Oregon.' }],
+      },
+    ],
+    output: [
+      {
+        role: 'MESSAGE_ROLE_ASSISTANT',
+        parts: [
+          {
+            text: "Portland is a great weekend destination! Here's a quick itinerary covering the best food, nature, and culture the city has to offer.",
+          },
+          {
+            tool_call: {
+              id: 'tc-syn-1',
+              name: 'attractions_api',
+              input_json: '{"location": "Portland, OR", "category": "food"}',
+            },
+          },
+        ],
+      },
+    ],
+    tools: [{ name: 'attractions_api', description: 'Find local attractions and restaurants' }],
+    usage: { input_tokens: 2200, output_tokens: 410, total_tokens: 2610 },
+    created_at: '2024-11-17T14:00:00.000Z',
+    latest_scores: {
+      relevance: {
+        value: { number: 9 },
+        evaluator_id: 'custom.relevance',
+        evaluator_version: '2025-02-01',
+        created_at: '2024-11-17T14:00:01.000Z',
+        passed: true,
+      },
+    },
+  },
+  {
+    generation_id: 'gen-syn-2',
+    conversation_id: 'conv-syn-1',
+    mode: 'SYNC',
+    model: { provider: 'anthropic', name: 'claude-sonnet-4-5' },
+    agent_name: 'travel-planner',
+    input: [
+      {
+        role: 'MESSAGE_ROLE_TOOL',
+        parts: [
+          {
+            tool_result: {
+              tool_call_id: 'tc-syn-1',
+              name: 'attractions_api',
+              content: '{"restaurants": ["Pok Pok", "Screen Door", "Pine State Biscuits"]}',
+            },
+          },
+        ],
+      },
+    ],
+    output: [
+      {
+        role: 'MESSAGE_ROLE_ASSISTANT',
+        parts: [
+          {
+            text: 'Based on top-rated spots, here are the must-visit restaurants: Pok Pok for Thai street food, Screen Door for brunch, and Pine State Biscuits for classic Southern comfort.',
+          },
+        ],
+      },
+    ],
+    usage: { input_tokens: 1800, output_tokens: 320, total_tokens: 2120 },
+    created_at: '2024-11-17T14:00:05.000Z',
+  },
+  {
+    generation_id: 'gen-syn-3',
+    conversation_id: 'conv-syn-1',
+    mode: 'SYNC',
+    model: { provider: 'openai', name: 'gpt-4o' },
+    agent_name: 'reviewer',
+    input: [
+      {
+        role: 'MESSAGE_ROLE_USER',
+        parts: [{ text: 'Review the Portland itinerary for family-friendliness.' }],
+      },
+    ],
+    output: [
+      {
+        role: 'MESSAGE_ROLE_ASSISTANT',
+        parts: [
+          {
+            text: 'The itinerary is mostly family-friendly. Pok Pok can be spicy for kids — consider adding Voodoo Doughnut as a kid-friendly alternative.',
+          },
+        ],
+      },
+    ],
+    usage: { input_tokens: 1100, output_tokens: 210, total_tokens: 1310 },
+    created_at: '2024-11-17T14:00:12.000Z',
+    error: null,
+    latest_scores: {
+      helpfulness: {
+        value: { number: 7 },
+        evaluator_id: 'custom.helpfulness',
+        evaluator_version: '2025-01-15',
+        evaluator_description: 'Rates how helpful the response is on a 1–10 scale',
+        created_at: '2024-11-17T14:00:13.000Z',
+        passed: true,
+      },
+      safety: {
+        value: { bool: true },
+        evaluator_id: 'sigil.safety',
+        evaluator_version: '2025-03-01',
+        created_at: '2024-11-17T14:00:13.500Z',
+        passed: true,
+      },
+    },
+  },
+];
+
+export const mockSyntheticFlowNodes: FlowNode[] = [
+  {
+    id: 'agent::travel-planner',
+    kind: 'agent',
+    label: 'travel-planner',
+    durationMs: 0,
+    startMs: 0,
+    status: 'success',
+    children: [
+      {
+        id: 'gen::gen-syn-1',
+        kind: 'generation',
+        label: 'travel-planner · claude-sonnet-4-5',
+        durationMs: 0,
+        startMs: 0,
+        status: 'success',
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        tokenCount: 2610,
+        generation: mockSyntheticGenerations[0],
+        children: [
+          {
+            id: 'toolcall::gen-syn-1::tc-syn-1',
+            kind: 'tool_call',
+            label: 'attractions_api',
+            durationMs: 0,
+            startMs: 0,
+            status: 'success',
+            generation: mockSyntheticGenerations[0],
+            toolCallId: 'tc-syn-1',
+            children: [],
+          },
+        ],
+      },
+      {
+        id: 'gen::gen-syn-2',
+        kind: 'generation',
+        label: 'travel-planner · claude-sonnet-4-5',
+        durationMs: 0,
+        startMs: 5000,
+        status: 'success',
+        model: 'claude-sonnet-4-5',
+        provider: 'anthropic',
+        tokenCount: 2120,
+        generation: mockSyntheticGenerations[1],
+        children: [],
+      },
+    ],
+  },
+  {
+    id: 'agent::reviewer',
+    kind: 'agent',
+    label: 'reviewer',
+    durationMs: 0,
+    startMs: 12000,
+    status: 'success',
+    children: [
+      {
+        id: 'gen::gen-syn-3',
+        kind: 'generation',
+        label: 'reviewer · gpt-4o',
+        durationMs: 0,
+        startMs: 12000,
+        status: 'success',
+        model: 'gpt-4o',
+        provider: 'openai',
+        tokenCount: 1310,
+        generation: mockSyntheticGenerations[2],
+        children: [],
+      },
+    ],
+  },
+];
+
 export const mockTokenSummary: TokenSummary = {
   inputTokens: 7477,
   outputTokens: 1737,

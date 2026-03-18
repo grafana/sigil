@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import FlowTree from '../../components/conversation-explore/FlowTree';
 import type { FlowNode } from '../../components/conversation-explore/types';
 import type { FlowGroupBy, FlowSortBy } from '../../components/conversation-explore/useConversationFlow';
-import { mockFlowNodes, mockFlowNodesWithError } from './fixtures';
+import { mockFlowNodes, mockFlowNodesWithError, mockSyntheticFlowNodes } from './fixtures';
 
 function FlowTreeWrapper({ nodes }: { nodes: FlowNode[] }) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -41,6 +41,10 @@ export const Default = {
 
 export const WithErrors = {
   args: { nodes: mockFlowNodesWithError },
+};
+
+export const SyntheticNoTrace = {
+  args: { nodes: mockSyntheticFlowNodes },
 };
 
 export const Empty = {

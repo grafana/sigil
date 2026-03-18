@@ -1,5 +1,11 @@
 import GenerationView from '../../components/conversation-explore/GenerationView';
-import { mockFlowNodes, mockFlowNodesWithError, mockGenerations } from './fixtures';
+import {
+  mockFlowNodes,
+  mockFlowNodesWithError,
+  mockGenerations,
+  mockSyntheticFlowNodes,
+  mockSyntheticGenerations,
+} from './fixtures';
 
 const meta = {
   title: 'Sigil/Conversation Explore/GenerationView',
@@ -335,6 +341,28 @@ export const WithCumulativeHistory = {
       },
     ],
     flowNodes: [],
+    onClose: () => {
+      // Storybook interaction-only callback.
+    },
+  },
+};
+
+export const SyntheticNoTrace = {
+  args: {
+    node: mockSyntheticFlowNodes[0].children[0],
+    allGenerations: mockSyntheticGenerations,
+    flowNodes: mockSyntheticFlowNodes,
+    onClose: () => {
+      // Storybook interaction-only callback.
+    },
+  },
+};
+
+export const SyntheticWithScores = {
+  args: {
+    node: mockSyntheticFlowNodes[1].children[0],
+    allGenerations: mockSyntheticGenerations,
+    flowNodes: mockSyntheticFlowNodes,
     onClose: () => {
       // Storybook interaction-only callback.
     },
