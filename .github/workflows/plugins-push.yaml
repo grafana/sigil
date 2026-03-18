@@ -53,7 +53,7 @@ jobs:
       auto-merge-environments: dev,ops
       # Post to the dev deployment channel because this happens all the time
       # and is super noisy. We don't deploy to prod with this pipeline anyway.
-      argo-workflow-slack-channel: '#hackathon-16-sigil-actually-useful-ai-o11y-deploys'
+      argo-workflow-slack-channel: '#sigil-deploys'
 
       # We don't want a GitHub release for every push to `main`.
       disable-github-release: true
