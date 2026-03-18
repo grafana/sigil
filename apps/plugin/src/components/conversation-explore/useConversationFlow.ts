@@ -382,14 +382,28 @@ export function useConversationFlow(
     const genIndex = buildGenerationIndex(allGenerations);
     const matchedGenIds = new Set<string>();
 
-    let spanNodes: FlowNode[] = [];
-    if (data.spans.length > 0) {
-      const startNs = findConversationStartNs(data.spans);
-      spanNodes = extractFlowNodes(data.spans, startNs, genIndex, matchedGenIds);
+    const spanStartNs = data.spans.length > 0 ? findConversationStartNs(data.spans) : null;
+    const genTimeRange = findGenerationTimeRangeMs(allGenerations);
+
+    let conversationStartMs: number;
+    if (spanStartNs !== null && genTimeRange !== null) {
+      const spanStartMs = Number(spanStartNs / NS_PER_MS);
+      conversationStartMs = Math.min(spanStartMs, genTimeRange.startMs);
+    } else if (spanStartNs !== null) {
+      conversationStartMs = Number(spanStartNs / NS_PER_MS);
+    } else if (genTimeRange !== null) {
+      conversationStartMs = genTimeRange.startMs;
+    } else {
+      conversationStartMs = 0;
     }
 
-    const genTimeRange = findGenerationTimeRangeMs(allGenerations);
-    const conversationStartMs = genTimeRange?.startMs ?? 0;
+    const conversationStartNs = BigInt(conversationStartMs) * NS_PER_MS;
+
+    let spanNodes: FlowNode[] = [];
+    if (data.spans.length > 0) {
+      spanNodes = extractFlowNodes(data.spans, conversationStartNs, genIndex, matchedGenIds);
+    }
+
     const syntheticNodes = buildSyntheticNodes(allGenerations, matchedGenIds, conversationStartMs);
 
     const flatNodes = [...spanNodes, ...syntheticNodes];
