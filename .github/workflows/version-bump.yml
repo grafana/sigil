@@ -1,0 +1,135 @@
+name: Version bump, changelog
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semver type of new version (major / minor / patch)'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      generate-changelog:
+        description: 'Generate changelog'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get secrets from Vault
+        id: get-secrets
+        uses: grafana/shared-workflows/actions/get-vault-secrets@a37de51f3d713a30a9e4b21bcdfbd38170020593 # get-vault-secrets/v1.3.0
+        env:
+          VAULT_INSTANCE: ops
+        with:
+          vault_instance: ${{ env.VAULT_INSTANCE }}
+          common_secrets: |
+            GITHUB_APP_ID=plugins-platform-bot-app:app-id
+            GITHUB_APP_PRIVATE_KEY=plugins-platform-bot-app:private-key
+          export_env: false
+
+      - name: Generate GitHub token
+        id: generate-github-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        with:
+          app-id: ${{ fromJSON(steps.get-secrets.outputs.secrets).GITHUB_APP_ID }}
+          private-key: ${{ fromJSON(steps.get-secrets.outputs.secrets).GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          token: ${{ steps.generate-github-token.outputs.token }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Setup Git
+        shell: bash
+        run: |
+          git config user.name 'grafana-plugins-platform-bot[bot]'
+          git config user.email '144369747+grafana-plugins-platform-bot[bot]@users.noreply.github.com'
+
+      - name: Get previous tag
+        id: previous-tag
+        if: inputs.generate-changelog
+        shell: bash
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "previous-tag=${PREVIOUS_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump version
+        id: bump
+        shell: bash
+        run: |
+          # Bump the plugin package.json (source of truth for the CD pipeline)
+          cd apps/plugin
+          NEW_VERSION=$(npm version "$INPUT_VERSION" --no-git-tag-version)
+          echo "new-version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
+
+          # Sync the root package.json to the same version
+          cd "$GITHUB_WORKSPACE"
+          npm version "${NEW_VERSION#v}" --no-git-tag-version --allow-same-version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+
+      - name: Generate changelog
+        if: inputs.generate-changelog
+        shell: bash
+        run: |
+          if [[ "${PREVIOUS_TAG}" == "v0.0.0" ]]; then
+            echo "No previous tag found, generating changelog for initial version"
+            npx generate-changelog -t HEAD --exclude "${EXCLUDE_STRING}"
+          else
+            echo "Generating changelog from ${PREVIOUS_TAG} to HEAD"
+            npx generate-changelog -t "${PREVIOUS_TAG}...HEAD" --exclude "${EXCLUDE_STRING}"
+          fi
+
+          # Clean up changelog format
+          sed -i '/^#\sChangelog$/Id' CHANGELOG.md
+          printf "# Changelog\n\n" | cat - CHANGELOG.md > temp && mv temp CHANGELOG.md
+          sed -i -E 's/^(#+ [0-9]+\.[0-9]+\.[0-9]+) \(([Uu]nreleased|[0-9]{4}-[0-9]{2}-[0-9]{2})\)/\1/' CHANGELOG.md
+          sed -i -E 's/^#### ([0-9]+\.[0-9]+\.[0-9]+.*)$/## \1/' CHANGELOG.md
+        env:
+          PREVIOUS_TAG: ${{ steps.previous-tag.outputs.previous-tag }}
+          NEW_VERSION: ${{ steps.bump.outputs.new-version }}
+          EXCLUDE_STRING: skip,no-changelog
+
+      - name: Sync changelog to plugin directory
+        shell: bash
+        run: |
+          # The CD workflow reads changelog from apps/plugin/CHANGELOG.md
+          cp CHANGELOG.md apps/plugin/CHANGELOG.md
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          git add package.json
+          git add apps/plugin/package.json
+          git add CHANGELOG.md || true
+          git add apps/plugin/CHANGELOG.md || true
+          # Remove any stale npm lock file
+          git rm --cached package-lock.json 2>/dev/null || true
+          git commit -m "chore(version): bump version to ${NEW_VERSION}"
+          # Push to the branch that triggered the workflow (supports both main and feature branches)
+          git push origin HEAD
+        env:
+          NEW_VERSION: ${{ steps.bump.outputs.new-version }}
+
+      - name: Create and push git tag
+        # Only create tags on main to prevent accidental releases from feature branches
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          git tag -a "${NEW_VERSION}" -m "Release version ${NEW_VERSION}"
+          git push origin --tags
+        env:
+          NEW_VERSION: ${{ steps.bump.outputs.new-version }}
