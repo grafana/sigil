@@ -34,6 +34,12 @@ export function modelAccentColor(model: string): string {
 }
 
 export function extractModelFromLabel(label: string): string {
+  // Handle synthetic generation labels with " · " separator (agent_name · model_name)
+  const syntheticIndex = label.indexOf(' · ');
+  if (syntheticIndex !== -1) {
+    return label.slice(syntheticIndex + 3);
+  }
+  // Fall back to space-based extraction for span labels (span_type model_name)
   const spaceIndex = label.indexOf(' ');
   return spaceIndex === -1 ? label : label.slice(spaceIndex + 1);
 }
