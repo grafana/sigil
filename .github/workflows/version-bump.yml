@@ -104,6 +104,7 @@ jobs:
           EXCLUDE_STRING: skip,no-changelog
 
       - name: Sync changelog to plugin directory
+        if: inputs.generate-changelog
         shell: bash
         run: |
           # The CD workflow reads changelog from apps/plugin/CHANGELOG.md
