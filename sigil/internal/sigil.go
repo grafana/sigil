@@ -39,7 +39,7 @@ func NewRuntime(cfg config.Config, logger log.Logger) (*Runtime, error) {
 		logger:            logger,
 		moduleInit:        modules.NewManager(logger),
 		modelCardBuilder:  buildModelCardService,
-		bootstrapTimeout:  10 * time.Second,
+		bootstrapTimeout:  2 * time.Minute,
 		transportRegistry: newServerTransportRegistry(),
 	}
 
