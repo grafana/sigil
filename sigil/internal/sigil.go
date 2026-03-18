@@ -39,7 +39,7 @@ func NewRuntime(cfg config.Config, logger log.Logger) (*Runtime, error) {
 		logger:            logger,
 		moduleInit:        modules.NewManager(logger),
 		modelCardBuilder:  buildModelCardService,
-		bootstrapTimeout:  10 * time.Second,
+		bootstrapTimeout:  2 * time.Minute,
 		transportRegistry: newServerTransportRegistry(),
 	}
 
@@ -243,7 +243,7 @@ func (r *Runtime) getModelCardService(ctx context.Context, enableLiveSource bool
 func (r *Runtime) newBootstrapContext() (context.Context, context.CancelFunc) {
 	timeout := r.bootstrapTimeout
 	if timeout <= 0 {
-		timeout = 10 * time.Second
+		timeout = 2 * time.Minute
 	}
 	return context.WithTimeout(context.Background(), timeout)
 }

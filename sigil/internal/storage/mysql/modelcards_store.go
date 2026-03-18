@@ -32,16 +32,20 @@ func NewModelCardStore(dsn string) (*ModelCardStore, error) {
 	return &ModelCardStore{db: db, logger: slog.Default()}, nil
 }
 
+// AutoMigrate runs model-card schema migrations under a MySQL advisory lock so
+// that concurrent querier / catalog-sync replicas do not stampede the database.
 func (s *ModelCardStore) AutoMigrate(ctx context.Context) error {
-	if err := s.db.WithContext(ctx).AutoMigrate(
-		&ModelCardModel{},
-		&ModelCardAliasModel{},
-		&ModelCardRefreshRunModel{},
-		&ModelCardRefreshLeaseModel{},
-	); err != nil {
-		return fmt.Errorf("auto-migrate model cards tables: %w", err)
-	}
-	return nil
+	return withMigrateLock(ctx, s.db, "sigil_modelcard_migrate", func() error {
+		if err := s.db.WithContext(ctx).AutoMigrate(
+			&ModelCardModel{},
+			&ModelCardAliasModel{},
+			&ModelCardRefreshRunModel{},
+			&ModelCardRefreshLeaseModel{},
+		); err != nil {
+			return fmt.Errorf("auto-migrate model cards tables: %w", err)
+		}
+		return nil
+	})
 }
 
 func (s *ModelCardStore) UpsertCards(ctx context.Context, source string, refreshedAt time.Time, cards []modelcards.Card) (int, error) {
