@@ -291,6 +291,138 @@ func TestCreateEvaluatorNormalizesIdentifiersWithWhitespace(t *testing.T) {
 	}
 }
 
+func TestPathID(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name   string
+		path   string
+		prefix string
+		wantID string
+		wantOK bool
+	}{
+		{
+			name:   "valid single segment id",
+			path:   "/api/v1/eval/evaluators/custom.helpfulness",
+			prefix: "/api/v1/eval/evaluators/",
+			wantID: "custom.helpfulness",
+			wantOK: true,
+		},
+		{
+			name:   "rejects nested path segments",
+			path:   "/api/v1/eval/evaluators/custom/helpfulness",
+			prefix: "/api/v1/eval/evaluators/",
+			wantOK: false,
+		},
+		{
+			name:   "rejects when prefix does not match",
+			path:   "/api/v1/eval/rules/custom.helpfulness",
+			prefix: "/api/v1/eval/evaluators/",
+			wantOK: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			gotID, gotOK := pathID(tc.path, tc.prefix)
+			if gotID != tc.wantID || gotOK != tc.wantOK {
+				t.Fatalf("pathID(%q, %q) = (%q, %t), want (%q, %t)", tc.path, tc.prefix, gotID, gotOK, tc.wantID, tc.wantOK)
+			}
+		})
+	}
+}
+
+func TestPathIDAction(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name       string
+		path       string
+		prefix     string
+		wantID     string
+		wantAction string
+		wantOK     bool
+	}{
+		{
+			name:       "valid id and action",
+			path:       "/api/v1/eval/predefined/evaluators/safety:archive",
+			prefix:     "/api/v1/eval/predefined/evaluators/",
+			wantID:     "safety",
+			wantAction: "archive",
+			wantOK:     true,
+		},
+		{
+			name:   "rejects when action is missing",
+			path:   "/api/v1/eval/predefined/evaluators/safety",
+			prefix: "/api/v1/eval/predefined/evaluators/",
+			wantOK: false,
+		},
+		{
+			name:   "rejects when prefix does not match",
+			path:   "/api/v1/eval/evaluators/safety:archive",
+			prefix: "/api/v1/eval/predefined/evaluators/",
+			wantOK: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			gotID, gotAction, gotOK := pathIDAction(tc.path, tc.prefix)
+			if gotID != tc.wantID || gotAction != tc.wantAction || gotOK != tc.wantOK {
+				t.Fatalf(
+					"pathIDAction(%q, %q) = (%q, %q, %t), want (%q, %q, %t)",
+					tc.path,
+					tc.prefix,
+					gotID,
+					gotAction,
+					gotOK,
+					tc.wantID,
+					tc.wantAction,
+					tc.wantOK,
+				)
+			}
+		})
+	}
+}
+
+func TestPathIDEscaped(t *testing.T) {
+	t.Parallel()
+
+	const prefix = "/api/v1/eval/rules/"
+
+	t.Run("accepts encoded slash via raw path", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/eval/rules/rule%2Fname", nil)
+		gotID, gotOK := pathIDEscaped(req, prefix)
+		if gotID != "rule/name" || !gotOK {
+			t.Fatalf("pathIDEscaped(encoded) = (%q, %t), want (%q, %t)", gotID, gotOK, "rule/name", true)
+		}
+	})
+
+	t.Run("rejects unescaped slash in path fallback mode", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/eval/rules/rule/name", nil)
+		req.URL.RawPath = ""
+		gotID, gotOK := pathIDEscaped(req, prefix)
+		if gotID != "" || gotOK {
+			t.Fatalf("pathIDEscaped(unescaped) = (%q, %t), want (%q, %t)", gotID, gotOK, "", false)
+		}
+	})
+
+	t.Run("rejects when prefix does not match", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/eval/evaluators/rule-1", nil)
+		gotID, gotOK := pathIDEscaped(req, prefix)
+		if gotID != "" || gotOK {
+			t.Fatalf("pathIDEscaped(prefix mismatch) = (%q, %t), want (%q, %t)", gotID, gotOK, "", false)
+		}
+	})
+}
+
 func TestCreateEvaluatorRejectsMultipleOutputKeys(t *testing.T) {
 	mux, _, _ := newEvalHTTPEnv(t)
 

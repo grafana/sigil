@@ -518,8 +518,8 @@ func formatCursor(cursor uint64) string {
 }
 
 func pathID(path string, prefix string) (string, bool) {
-	trimmed := strings.TrimPrefix(path, prefix)
-	if trimmed == "" || strings.Contains(trimmed, "/") {
+	trimmed, ok := strings.CutPrefix(path, prefix)
+	if !ok || trimmed == "" || strings.Contains(trimmed, "/") {
 		return "", false
 	}
 	return trimmed, true
@@ -532,8 +532,8 @@ func pathIDEscaped(req *http.Request, prefix string) (string, bool) {
 	if path == "" {
 		path = req.URL.Path
 	}
-	trimmed := strings.TrimPrefix(path, prefix)
-	if trimmed == "" {
+	trimmed, ok := strings.CutPrefix(path, prefix)
+	if !ok || trimmed == "" {
 		return "", false
 	}
 	// When using RawPath, trimmed may contain %2F (encoded slash) but no literal /.
@@ -549,8 +549,8 @@ func pathIDEscaped(req *http.Request, prefix string) (string, bool) {
 }
 
 func pathIDAction(path string, prefix string) (string, string, bool) {
-	trimmed := strings.TrimPrefix(path, prefix)
-	if trimmed == "" || strings.Contains(trimmed, "/") {
+	trimmed, ok := strings.CutPrefix(path, prefix)
+	if !ok || trimmed == "" || strings.Contains(trimmed, "/") {
 		return "", "", false
 	}
 
