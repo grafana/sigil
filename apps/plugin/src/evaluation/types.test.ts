@@ -6,13 +6,14 @@ import {
   kindSupportsCustomPassValue,
   LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
   LLM_JUDGE_DEFAULT_USER_PROMPT,
+  LLM_JUDGE_MIN_MAX_TOKENS,
   LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION,
 } from './types';
 
 describe('buildForkEvaluatorConfig', () => {
   it('materializes default judge prompts when a forked template omits them', () => {
-    expect(buildForkEvaluatorConfig('llm_judge', { max_tokens: 256, temperature: 0 })).toEqual({
-      max_tokens: 256,
+    expect(buildForkEvaluatorConfig('llm_judge', { max_tokens: LLM_JUDGE_MIN_MAX_TOKENS, temperature: 0 })).toEqual({
+      max_tokens: LLM_JUDGE_MIN_MAX_TOKENS,
       temperature: 0,
       system_prompt: LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
       user_prompt: LLM_JUDGE_DEFAULT_USER_PROMPT,
