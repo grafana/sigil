@@ -7,6 +7,7 @@ import (
 
 const (
 	SourceOpenRouter   = "openrouter"
+	SourceBedrock      = "bedrock"
 	SourceSupplemental = "supplemental"
 
 	BootstrapModeSnapshotFirst = "snapshot-first"
