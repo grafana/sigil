@@ -15,7 +15,7 @@ describe('PublishVersionForm', () => {
     render(
       <PublishVersionForm
         kind="llm_judge"
-        initialConfig={{ provider: 'openai', max_tokens: 128, temperature: 0 }}
+        initialConfig={{ provider: 'openai', max_tokens: 256, temperature: 0 }}
         initialOutputKeys={[{ key: 'score', type: 'number' }]}
         onSubmit={onSubmit}
         onCancel={jest.fn()}

@@ -11,8 +11,8 @@ import {
 
 describe('buildForkEvaluatorConfig', () => {
   it('materializes default judge prompts when a forked template omits them', () => {
-    expect(buildForkEvaluatorConfig('llm_judge', { max_tokens: 128, temperature: 0 })).toEqual({
-      max_tokens: 128,
+    expect(buildForkEvaluatorConfig('llm_judge', { max_tokens: 256, temperature: 0 })).toEqual({
+      max_tokens: 256,
       temperature: 0,
       system_prompt: LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
       user_prompt: LLM_JUDGE_DEFAULT_USER_PROMPT,

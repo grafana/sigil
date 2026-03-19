@@ -10,7 +10,7 @@ describe('EvaluatorDetail', () => {
       version: '2026-03-08',
       kind: 'llm_judge',
       config: {
-        max_tokens: 128,
+        max_tokens: 256,
         temperature: 0,
       },
       output_keys: [{ key: 'helpfulness', type: 'number' }],

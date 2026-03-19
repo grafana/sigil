@@ -122,7 +122,7 @@ func newLLMJudgeTemplate(id string, task string, systemPrompt string, userPrompt
 			Version:     DefaultTemplateVersion,
 			Kind:        evalpkg.EvaluatorKindLLMJudge,
 			Config: map[string]any{
-				"max_tokens":    128,
+				"max_tokens":    evalpkg.LLMJudgeMinMaxTokens,
 				"temperature":   0.0,
 				"system_prompt": systemPrompt,
 				"user_prompt":   userPrompt,

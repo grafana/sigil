@@ -7,7 +7,7 @@ describe('TemplateConfigSummary', () => {
     render(
       <TemplateConfigSummary
         kind="llm_judge"
-        config={{ max_tokens: 128, temperature: 0 }}
+        config={{ max_tokens: 256, temperature: 0 }}
         outputKeys={[{ key: 'helpfulness', type: 'number' }]}
       />
     );

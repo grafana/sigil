@@ -19,7 +19,7 @@ var llmJudgeTemplateVarPattern = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_]+)\s*\}
 const (
 	defaultLLMJudgeSystemPrompt = "You evaluate one assistant response. Use only the user input and assistant output. Follow the score field description exactly. Be strict. If uncertain, choose the lower score."
 	defaultLLMJudgeUserPrompt   = "Latest user message:\n{{latest_user_message}}\n\nAssistant response:\n{{assistant_response}}"
-	defaultLLMJudgeMaxTokens    = 128
+	defaultLLMJudgeMaxTokens    = 256
 	llmJudgeExplanationPrompt   = "Very brief one-sentence justification for the score."
 )
 
@@ -59,6 +59,9 @@ func (e *LLMJudgeEvaluator) Evaluate(ctx context.Context, input EvalInput, defin
 	if maxTokens <= 0 {
 		maxTokens = defaultLLMJudgeMaxTokens
 	}
+	if maxTokens < evalpkg.LLMJudgeMinMaxTokens {
+		maxTokens = evalpkg.LLMJudgeMinMaxTokens
+	}
 	temperature := configFloat(definition.Config, "temperature", 0)
 	timeoutMs, _ := configInt(definition.Config, "timeout_ms")
 	if timeoutMs <= 0 {
@@ -68,23 +71,37 @@ func (e *LLMJudgeEvaluator) Evaluate(ctx context.Context, input EvalInput, defin
 	judgeCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
 	defer cancel()
 
-	response, err := client.Judge(judgeCtx, judges.JudgeRequest{
-		SystemPrompt: systemPrompt,
-		UserPrompt:   userPrompt,
-		Model:        modelName,
-		MaxTokens:    maxTokens,
-		Temperature:  temperature,
-		OutputSchema: BuildJudgeSchema(definition.OutputKeys),
-	})
-	if err != nil {
-		if judgeCtx.Err() != nil {
-			return nil, fmt.Errorf("judge call timed out: %w", err)
-		}
-		return nil, err
-	}
-
 	meta := firstOutputKey(definition, "judge_score", evalpkg.ScoreTypeNumber)
-	value, parsedPassed, explanation, err := parseJudgeResponse(response.Text, meta.Key, meta.Type)
+	schema := BuildJudgeSchema(definition.OutputKeys)
+
+	var response judges.JudgeResponse
+	var value evalpkg.ScoreValue
+	var parsedPassed *bool
+	var explanation string
+
+	for attempt := 0; attempt < 2; attempt++ {
+		response, err = client.Judge(judgeCtx, judges.JudgeRequest{
+			SystemPrompt: systemPrompt,
+			UserPrompt:   userPrompt,
+			Model:        modelName,
+			MaxTokens:    maxTokens,
+			Temperature:  temperature,
+			OutputSchema: schema,
+		})
+		if err != nil {
+			if judgeCtx.Err() != nil {
+				return nil, fmt.Errorf("judge call timed out: %w", err)
+			}
+			return nil, err
+		}
+
+		value, parsedPassed, explanation, err = parseJudgeResponse(response.Text, meta.Key, meta.Type)
+		if err != nil && attempt == 0 && strings.Contains(err.Error(), "truncated JSON") {
+			maxTokens *= 2
+			continue
+		}
+		break
+	}
 	if err != nil {
 		return nil, evalpkg.Permanent(err)
 	}
@@ -186,6 +203,13 @@ func parseJudgeResponse(raw string, scoreKey string, scoreType evalpkg.ScoreType
 	parsed := map[string]any{}
 	if err := json.Unmarshal([]byte(trimmed), &parsed); err == nil {
 		return parseJudgeJSON(parsed, scoreKey, scoreType)
+	}
+
+	// Response looks like JSON but failed to parse — likely truncated due to
+	// insufficient max_tokens. Return a clear error instead of silently using
+	// the broken JSON as a string value.
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		return evalpkg.ScoreValue{}, nil, "", fmt.Errorf("judge response is truncated JSON: increase max_tokens")
 	}
 
 	switch scoreType {

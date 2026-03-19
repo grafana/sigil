@@ -1,5 +1,6 @@
 import { validateJudgeTarget, validateSharedForm } from './formValidation';
 import { createDefaultHeuristicQuery } from './heuristicConfig';
+import { LLM_JUDGE_MIN_MAX_TOKENS, LLM_JUDGE_MAX_MAX_TOKENS } from './types';
 
 describe('validateSharedForm', () => {
   const baseInput = {
@@ -8,7 +9,7 @@ describe('validateSharedForm', () => {
     provider: '',
     model: '',
     pattern: '',
-    maxTokens: 128,
+    maxTokens: LLM_JUDGE_MIN_MAX_TOKENS,
     temperature: 0,
     schemaJson: '{}',
     heuristicQuery: createDefaultHeuristicQuery(),
@@ -45,6 +46,32 @@ describe('validateSharedForm', () => {
     const result = validateSharedForm(baseInput);
     expect(result.judgeTargetError).toBeUndefined();
     expect(result.hasErrors).toBe(false);
+  });
+
+  it('rejects max_tokens below minimum', () => {
+    const result = validateSharedForm({ ...baseInput, maxTokens: 128 });
+    expect(result.maxTokensError).toBe(
+      `Must be an integer between ${LLM_JUDGE_MIN_MAX_TOKENS} and ${LLM_JUDGE_MAX_MAX_TOKENS}`
+    );
+    expect(result.hasErrors).toBe(true);
+  });
+
+  it('rejects max_tokens above maximum', () => {
+    const result = validateSharedForm({ ...baseInput, maxTokens: 2048 });
+    expect(result.maxTokensError).toBe(
+      `Must be an integer between ${LLM_JUDGE_MIN_MAX_TOKENS} and ${LLM_JUDGE_MAX_MAX_TOKENS}`
+    );
+    expect(result.hasErrors).toBe(true);
+  });
+
+  it('accepts max_tokens at minimum', () => {
+    const result = validateSharedForm({ ...baseInput, maxTokens: LLM_JUDGE_MIN_MAX_TOKENS });
+    expect(result.maxTokensError).toBeUndefined();
+  });
+
+  it('accepts max_tokens at maximum', () => {
+    const result = validateSharedForm({ ...baseInput, maxTokens: LLM_JUDGE_MAX_MAX_TOKENS });
+    expect(result.maxTokensError).toBeUndefined();
   });
 
   it('rejects pass threshold values above max', () => {

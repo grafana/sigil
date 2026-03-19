@@ -1,4 +1,4 @@
-import type { EvaluatorKind, ScoreType } from './types';
+import { type EvaluatorKind, type ScoreType, LLM_JUDGE_MIN_MAX_TOKENS, LLM_JUDGE_MAX_MAX_TOKENS } from './types';
 import { validateHeuristicQuery, type HeuristicQueryGroup } from './heuristicConfig';
 
 export type SharedInvalidField =
@@ -77,8 +77,11 @@ export function validateSharedForm(input: SharedFormValidationInput): SharedForm
   const regexPatternError = input.kind === 'regex' && input.pattern.trim() === '' ? 'Pattern is required' : undefined;
   const judgeTargetError = input.kind === 'llm_judge' ? validateJudgeTarget(input.provider, input.model) : undefined;
   const maxTokensError =
-    input.kind === 'llm_judge' && (!Number.isInteger(input.maxTokens) || input.maxTokens < 1)
-      ? 'Must be an integer greater than 0'
+    input.kind === 'llm_judge' &&
+    (!Number.isInteger(input.maxTokens) ||
+      input.maxTokens < LLM_JUDGE_MIN_MAX_TOKENS ||
+      input.maxTokens > LLM_JUDGE_MAX_MAX_TOKENS)
+      ? `Must be an integer between ${LLM_JUDGE_MIN_MAX_TOKENS} and ${LLM_JUDGE_MAX_MAX_TOKENS}`
       : undefined;
   const temperatureError =
     input.kind === 'llm_judge' &&
