@@ -79,5 +79,5 @@ func newBedrockSource(ctx context.Context, region string) (*modelcards.BedrockSo
 	}
 
 	client := bedrock.NewFromConfig(awsCfg)
-	return modelcards.NewBedrockSource(client, region), nil
+	return modelcards.NewBedrockSource(client), nil
 }

@@ -19,13 +19,11 @@ type BedrockModelLister interface {
 
 type BedrockSource struct {
 	client BedrockModelLister
-	region string
 }
 
-func NewBedrockSource(client BedrockModelLister, region string) *BedrockSource {
+func NewBedrockSource(client BedrockModelLister) *BedrockSource {
 	return &BedrockSource{
 		client: client,
-		region: region,
 	}
 }
 

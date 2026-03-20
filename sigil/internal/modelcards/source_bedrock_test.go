@@ -103,7 +103,7 @@ func TestBedrockSourceFetch(t *testing.T) {
 		},
 	}
 
-	src := NewBedrockSource(client, "us-east-1")
+	src := NewBedrockSource(client)
 
 	if src.Name() != SourceBedrock {
 		t.Fatalf("expected source name %q, got %q", SourceBedrock, src.Name())
@@ -144,7 +144,7 @@ func TestBedrockSourceFetch(t *testing.T) {
 
 func TestBedrockSourceFetchError(t *testing.T) {
 	client := &stubBedrockClient{err: fmt.Errorf("access denied")}
-	src := NewBedrockSource(client, "us-east-1")
+	src := NewBedrockSource(client)
 
 	_, err := src.Fetch(context.Background())
 	if err == nil {
@@ -154,7 +154,7 @@ func TestBedrockSourceFetchError(t *testing.T) {
 
 func TestBedrockSourceEmptyModels(t *testing.T) {
 	client := &stubBedrockClient{models: nil}
-	src := NewBedrockSource(client, "us-east-1")
+	src := NewBedrockSource(client)
 
 	cards, err := src.Fetch(context.Background())
 	if err != nil {
@@ -184,7 +184,7 @@ func TestBedrockSourceSkipsEmptyModelID(t *testing.T) {
 			},
 		},
 	}
-	src := NewBedrockSource(client, "us-east-1")
+	src := NewBedrockSource(client)
 
 	cards, err := src.Fetch(context.Background())
 	if err != nil {
