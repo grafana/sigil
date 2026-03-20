@@ -13,7 +13,7 @@ type staticSource struct {
 	err   error
 }
 
-func (s *staticSource) Name() string                                { return s.name }
+func (s *staticSource) Name() string { return s.name }
 func (s *staticSource) Fetch(_ context.Context) ([]Card, error) {
 	if s.err != nil {
 		return nil, s.err

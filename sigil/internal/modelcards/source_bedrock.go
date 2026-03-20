@@ -56,8 +56,8 @@ func (s *BedrockSource) Fetch(ctx context.Context) ([]Card, error) {
 		}
 
 		card := Card{
-			ModelKey:          modelKey(SourceBedrock, modelID),
-			Source:            SourceBedrock,
+			ModelKey:         modelKey(SourceBedrock, modelID),
+			Source:           SourceBedrock,
 			SourceModelID:    modelID,
 			Name:             bedrockModelName(m),
 			Provider:         "bedrock",
