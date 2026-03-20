@@ -84,6 +84,9 @@ func metricRequestArea(route string, requestPath string) string {
 	if route == "/api/v1/conversations/" && isFeedbackPath(requestPath) {
 		return "feedback"
 	}
+	if isQueryRoute(route) {
+		return "query"
+	}
 
 	switch {
 	case route == "/healthz", route == "/readyz":
@@ -100,13 +103,13 @@ func metricRequestArea(route string, requestPath string) string {
 		return "settings"
 	case strings.HasPrefix(route, "/api/v1/model-cards"):
 		return "model_cards"
-	case strings.HasPrefix(route, "/api/v1/conversations"):
-		return "query"
-	case strings.HasPrefix(route, "/api/v1/generations/"):
-		return "query"
 	default:
 		return "unknown"
 	}
+}
+
+func isQueryRoute(route string) bool {
+	return strings.HasPrefix(route, "/api/v1/conversations") || strings.HasPrefix(route, "/api/v1/generations/")
 }
 
 func isFeedbackPath(path string) bool {
