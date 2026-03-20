@@ -1,6 +1,6 @@
 {
   "name": "@grafana/sigil-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "build": "webpack -c ./webpack.config.ts --env production",

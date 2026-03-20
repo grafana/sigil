@@ -26,14 +26,14 @@ permissions: {}
 jobs:
   cd:
     name: CD
-    uses: grafana/plugin-ci-workflows/.github/workflows/cd.yml@ci-cd-workflows/v5.1.0
+    uses: grafana/plugin-ci-workflows/.github/workflows/cd.yml@ci-cd-workflows/v6.1.1
     permissions:
       contents: write
       id-token: write
       attestations: write
       pull-requests: read
     with:
-      go-version: '1.25.5'
+      go-version: '1.25.7'
       golangci-lint-version: '2.8.0'
       go-setup-caching: true
       plugin-directory: apps/plugin
