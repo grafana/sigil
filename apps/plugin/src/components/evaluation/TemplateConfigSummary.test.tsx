@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+import { LLM_JUDGE_MIN_MAX_TOKENS } from '../../evaluation/types';
 import TemplateConfigSummary from './TemplateConfigSummary';
 
 describe('TemplateConfigSummary', () => {
@@ -7,7 +8,7 @@ describe('TemplateConfigSummary', () => {
     render(
       <TemplateConfigSummary
         kind="llm_judge"
-        config={{ max_tokens: 128, temperature: 0 }}
+        config={{ max_tokens: LLM_JUDGE_MIN_MAX_TOKENS, temperature: 0 }}
         outputKeys={[{ key: 'helpfulness', type: 'number' }]}
       />
     );

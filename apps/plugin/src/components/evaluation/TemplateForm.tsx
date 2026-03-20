@@ -7,6 +7,7 @@ import {
   JSON_SCHEMA_SUPPORTED_KEYWORDS,
   LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
   LLM_JUDGE_DEFAULT_USER_PROMPT,
+  LLM_JUDGE_MIN_MAX_TOKENS,
   LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION,
   buildOutputKeyFromForm,
   getDefaultOutputKey,
@@ -180,7 +181,7 @@ export default function TemplateForm({ onSubmit, onCancel, onConfigChange, dataS
   const [modelOptions, setModelOptions] = useState<Array<SelectableValue<string>>>([]);
   const [systemPrompt, setSystemPrompt] = useState('');
   const [userPrompt, setUserPrompt] = useState('');
-  const [maxTokens, setMaxTokens] = useState(128);
+  const [maxTokens, setMaxTokens] = useState(LLM_JUDGE_MIN_MAX_TOKENS);
   const [temperature, setTemperature] = useState(0);
 
   useEffect(() => {

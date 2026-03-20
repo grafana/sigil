@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import EvaluatorDetail from './EvaluatorDetail';
-import type { Evaluator } from '../../evaluation/types';
+import { type Evaluator, LLM_JUDGE_MIN_MAX_TOKENS } from '../../evaluation/types';
 
 describe('EvaluatorDetail', () => {
   it('shows effective default judge prompts when config omits them', () => {
@@ -10,7 +10,7 @@ describe('EvaluatorDetail', () => {
       version: '2026-03-08',
       kind: 'llm_judge',
       config: {
-        max_tokens: 128,
+        max_tokens: LLM_JUDGE_MIN_MAX_TOKENS,
         temperature: 0,
       },
       output_keys: [{ key: 'helpfulness', type: 'number' }],

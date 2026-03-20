@@ -125,6 +125,12 @@ export function buildOutputKeyFromForm(input: OutputKeyFormInput): EvalOutputKey
   return ok;
 }
 
+/** Minimum max_tokens for LLM judge evaluators. Must match LLMJudgeMinMaxTokens in eval/types.go. */
+export const LLM_JUDGE_MIN_MAX_TOKENS = 256;
+
+/** Maximum max_tokens a user can configure. Must match LLMJudgeMaxMaxTokens in eval/types.go. */
+export const LLM_JUDGE_MAX_MAX_TOKENS = 1024;
+
 /** Backend defaults applied when config fields are omitted. */
 export const LLM_JUDGE_DEFAULT_SYSTEM_PROMPT =
   'You evaluate one assistant response. Use only the user input and assistant output. Follow the score field description exactly. Be strict. If uncertain, choose the lower score.';

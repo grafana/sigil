@@ -335,8 +335,13 @@ export default function EvalTestPanel({
         </span>
 
         {error && (
-          <Alert severity="error" title="Test failed">
-            {error}
+          <Alert
+            severity={error.includes('truncated JSON') ? 'warning' : 'error'}
+            title={error.includes('truncated JSON') ? 'Response truncated' : 'Test failed'}
+          >
+            {error.includes('truncated JSON')
+              ? 'The judge model ran out of tokens before finishing its response. Increase max_tokens in the evaluator config (minimum 256).'
+              : error}
           </Alert>
         )}
         {result && <TestResultDisplay result={result} />}
