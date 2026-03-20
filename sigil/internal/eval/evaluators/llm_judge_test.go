@@ -209,6 +209,59 @@ func TestRenderTemplateUsesDeveloperFacingAliases(t *testing.T) {
 	}
 }
 
+func TestRenderTemplateExtractsPlainTextFromToolResultContentJSON(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentJSON string
+		wantBody    string
+	}{
+		{
+			name:        "array of text blocks",
+			contentJSON: `[{"type":"text","text":"Applied 1 operations (version=2)"}]`,
+			wantBody:    "Applied 1 operations (version=2)",
+		},
+		{
+			name:        "multiple text blocks joined",
+			contentJSON: `[{"type":"text","text":"first"},{"type":"text","text":"second"}]`,
+			wantBody:    "first\nsecond",
+		},
+		{
+			name:        "plain string",
+			contentJSON: `"simple result"`,
+			wantBody:    "simple result",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			input := EvalInput{
+				Generation: &sigilv1.Generation{
+					Input: []*sigilv1.Message{
+						{
+							Role: sigilv1.MessageRole_MESSAGE_ROLE_TOOL,
+							Parts: []*sigilv1.Part{{
+								Metadata: &sigilv1.PartMetadata{ProviderType: "tool_result"},
+								Payload: &sigilv1.Part_ToolResult{ToolResult: &sigilv1.ToolResult{
+									ToolCallId:  "call-1",
+									Name:        "my_tool",
+									ContentJson: []byte(tc.contentJSON),
+								}},
+							}},
+						},
+					},
+				},
+			}
+			rendered := renderTemplate("Results={{tool_results}}", input)
+			if !strings.Contains(rendered, tc.wantBody) {
+				t.Fatalf("expected plain text %q in rendered output, got:\n%s", tc.wantBody, rendered)
+			}
+			if strings.Contains(rendered, `"type"`) || strings.Contains(rendered, `"text"`) {
+				t.Fatalf("expected no raw JSON keys in rendered output, got:\n%s", rendered)
+			}
+		})
+	}
+}
+
 func TestRenderTemplateKeepsSimpleVariablesComposableAndOmitsEmptyCompoundValues(t *testing.T) {
 	input := EvalInput{
 		Generation: &sigilv1.Generation{
