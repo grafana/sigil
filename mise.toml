@@ -432,6 +432,43 @@ run = "GOWORK=off go test ./sigil -run '^TestConformance' -count=1"
 description = "Run the shared SDK conformance suites"
 run = "mise run test:sdk:conformance"
 
+[tasks."sdk:py:bump"]
+description = "Bump version across all 9 Python SDK pyproject.toml files"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+VERSION="${1:?Usage: mise run sdk:py:bump <version>}"
+
+if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Error: version must be in MAJOR.MINOR.PATCH format (got: $VERSION)" >&2
+  exit 1
+fi
+
+PACKAGE_DIRS=(
+  sdks/python
+  sdks/python-providers/openai
+  sdks/python-providers/anthropic
+  sdks/python-providers/gemini
+  sdks/python-frameworks/langchain
+  sdks/python-frameworks/langgraph
+  sdks/python-frameworks/openai-agents
+  sdks/python-frameworks/llamaindex
+  sdks/python-frameworks/google-adk
+)
+
+for dir in "${PACKAGE_DIRS[@]}"; do
+  file="${dir}/pyproject.toml"
+  perl -i -pe "s/^version = \".*\"/version = \"${VERSION}\"/" "$file"
+  if [[ "$dir" != "sdks/python" ]]; then
+    perl -i -pe "s/\"sigil-sdk>=.*\"/\"sigil-sdk>=${VERSION}\"/" "$file"
+  fi
+  echo "  updated ${file}"
+done
+
+echo "All Python SDK versions bumped to ${VERSION}"
+'''
+
 [tasks."test:sdk:core-conformance"]
 description = "Run core conformance suites across Go, TypeScript/JavaScript, Python, Java, and .NET SDKs"
 run = """
