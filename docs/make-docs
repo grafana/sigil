@@ -314,6 +314,10 @@
 
 set -ef
 
+errr() {
+  printf 'ERRR: %s\r\n' "$1" >&2
+}
+
 readonly DOCS_HOST_PORT="${DOCS_HOST_PORT:-3002}"
 readonly DOCS_IMAGE="${DOCS_IMAGE:-grafana/docs-base:latest}"
 
@@ -755,10 +759,6 @@ debg() {
   if [ -n "${DEBUG}" ]; then
     printf 'DEBG: %s\r\n' "$1" >&2
   fi
-}
-
-errr() {
-  printf 'ERRR: %s\r\n' "$1" >&2
 }
 
 note() {
