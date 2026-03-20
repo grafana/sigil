@@ -146,12 +146,14 @@ type CompactorConfig struct {
 }
 
 type ModelCardsConfig struct {
-	SyncInterval  time.Duration
-	LeaseTTL      time.Duration
-	SourceTimeout time.Duration
-	StaleSoft     time.Duration
-	StaleHard     time.Duration
-	BootstrapMode string
+	SyncInterval   time.Duration
+	LeaseTTL       time.Duration
+	SourceTimeout  time.Duration
+	StaleSoft      time.Duration
+	StaleHard      time.Duration
+	BootstrapMode  string
+	BedrockEnabled bool
+	BedrockRegion  string
 }
 
 func FromEnv() Config {
@@ -233,12 +235,14 @@ func FromEnv() Config {
 			TargetBlockBytes:   getEnvInt64("SIGIL_COMPACTOR_TARGET_BLOCK_BYTES", DefaultCompactorTargetBlockBytes),
 		},
 		ModelCardsConfig: ModelCardsConfig{
-			SyncInterval:  getEnvDuration("SIGIL_MODEL_CARDS_SYNC_INTERVAL", 30*time.Minute),
-			LeaseTTL:      getEnvDuration("SIGIL_MODEL_CARDS_LEASE_TTL", 2*time.Minute),
-			SourceTimeout: getEnvDuration("SIGIL_MODEL_CARDS_SOURCE_TIMEOUT", 15*time.Second),
-			StaleSoft:     getEnvDuration("SIGIL_MODEL_CARDS_STALE_SOFT", 2*time.Hour),
-			StaleHard:     getEnvDuration("SIGIL_MODEL_CARDS_STALE_HARD", 24*time.Hour),
-			BootstrapMode: strings.ToLower(strings.TrimSpace(getEnv("SIGIL_MODEL_CARDS_BOOTSTRAP_MODE", "snapshot-first"))),
+			SyncInterval:   getEnvDuration("SIGIL_MODEL_CARDS_SYNC_INTERVAL", 30*time.Minute),
+			LeaseTTL:       getEnvDuration("SIGIL_MODEL_CARDS_LEASE_TTL", 2*time.Minute),
+			SourceTimeout:  getEnvDuration("SIGIL_MODEL_CARDS_SOURCE_TIMEOUT", 15*time.Second),
+			StaleSoft:      getEnvDuration("SIGIL_MODEL_CARDS_STALE_SOFT", 2*time.Hour),
+			StaleHard:      getEnvDuration("SIGIL_MODEL_CARDS_STALE_HARD", 24*time.Hour),
+			BootstrapMode:  strings.ToLower(strings.TrimSpace(getEnv("SIGIL_MODEL_CARDS_BOOTSTRAP_MODE", "snapshot-first"))),
+			BedrockEnabled: getEnvBool("SIGIL_EVAL_BEDROCK_ENABLED", false),
+			BedrockRegion:  bedrockRegion(),
 		},
 		EvalWorkerEnabled:        getEnvBool("SIGIL_EVAL_WORKER_ENABLED", false),
 		EvalMaxConcurrent:        getEnvInt("SIGIL_EVAL_MAX_CONCURRENT", DefaultEvalMaxConcurrent),
@@ -587,4 +591,14 @@ func splitProviderModel(raw string) (string, string) {
 	provider := strings.TrimSpace(parts[0])
 	model := strings.TrimSpace(parts[1])
 	return provider, model
+}
+
+func bedrockRegion() string {
+	if r := strings.TrimSpace(os.Getenv("SIGIL_EVAL_BEDROCK_REGION")); r != "" {
+		return r
+	}
+	if r := strings.TrimSpace(os.Getenv("AWS_REGION")); r != "" {
+		return r
+	}
+	return "us-east-1"
 }
