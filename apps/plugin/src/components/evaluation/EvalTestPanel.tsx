@@ -4,7 +4,8 @@ import type { GrafanaTheme2, SelectableValue } from '@grafana/data';
 import { Alert, Button, Field, Select, Spinner, Stack, Text, useStyles2 } from '@grafana/ui';
 import { defaultConversationsDataSource, type ConversationsDataSource } from '../../conversation/api';
 import type { GenerationLookupHints } from '../../conversation/types';
-import type { GenerationDetail, Message } from '../../generation/types';
+import type { GenerationDetail } from '../../generation/types';
+import { parseMessages } from '../../conversation/messageParser';
 import { defaultEvaluationDataSource, type EvaluationDataSource } from '../../evaluation/api';
 import { validateJudgeTarget } from '../../evaluation/formValidation';
 import type { EvalOutputKey, EvalTestResponse, EvaluatorKind } from '../../evaluation/types';
@@ -218,7 +219,7 @@ export default function EvalTestPanel({
     }
   };
 
-  const allMessages: Message[] = generation ? [...(generation.input ?? []), ...(generation.output ?? [])] : [];
+  const allMessages = generation ? [...parseMessages(generation.input), ...parseMessages(generation.output)] : [];
   const conversationId = generation?.conversation_id ?? generationLookupHintsRef.current?.conversation_id;
 
   return (
