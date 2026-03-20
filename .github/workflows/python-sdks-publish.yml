@@ -14,12 +14,14 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   build:
     if: github.repository == 'grafana/sigil' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     outputs:
       new-version: ${{ steps.bump.outputs.new-version }}
 
