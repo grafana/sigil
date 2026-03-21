@@ -45,6 +45,26 @@ type Service struct {
 	sleepFn       func(context.Context, time.Duration) error
 }
 
+type truncateFailureError struct {
+	cause   error
+	details mysqlstorage.ErrorDetails
+}
+
+func newTruncateFailureError(err error) error {
+	return &truncateFailureError{
+		cause:   err,
+		details: mysqlstorage.ClassifyError(err),
+	}
+}
+
+func (e *truncateFailureError) Error() string {
+	return e.cause.Error()
+}
+
+func (e *truncateFailureError) Unwrap() error {
+	return e.cause
+}
+
 func NewService(
 	cfg config.CompactorConfig,
 	logger log.Logger,
@@ -184,7 +204,9 @@ func (s *Service) runTruncateCycle(ctx context.Context) {
 		return s.truncateShard(workerCtx, shard, olderThan)
 	}); err != nil {
 		status = "error"
-		_ = level.Error(s.logger).Log("msg", "compactor truncation workers failed", "phase", truncatePhase, "err", err)
+		fields := []any{"msg", "compactor truncation workers failed", "phase", truncatePhase, "err", err}
+		fields = append(fields, truncateFailureLogFields(err)...)
+		_ = level.Error(s.logger).Log(fields...)
 	}
 }
 
@@ -242,12 +264,14 @@ func (s *Service) runShardWorkers(ctx context.Context, shards []storage.TenantSh
 						firstErr = err
 					}
 					mu.Unlock()
-					_ = level.Error(s.logger).Log(
+					fields := []any{
 						"msg", "compactor worker shard failed",
 						"tenant_id", shard.TenantID,
 						"shard_id", shard.ShardID,
 						"err", err,
-					)
+					}
+					fields = append(fields, truncateFailureLogFields(err)...)
+					_ = level.Error(s.logger).Log(fields...)
 				}
 			}
 		}()
@@ -457,31 +481,48 @@ func (s *Service) truncateCompactedWithRetry(
 	limit := s.cfg.BatchSize
 	backoff := truncateInitialRetryBackoff
 	retries := 0
+	var lastRetryErr error
 
 	for {
 		deleted, err := s.truncator.TruncateCompacted(ctx, shard.TenantID, shardPredicate, olderThan, limit)
 		if err == nil {
 			if retries > 0 {
-				observeTruncateDeadlock("recovered")
-				_ = level.Info(s.logger).Log(
-					"msg", "compactor truncation recovered after retryable MySQL lock error",
+				details := mysqlstorage.ClassifyError(lastRetryErr)
+				if details.Class == mysqlstorage.ErrorClassRetryableLock {
+					observeTruncateDeadlock("recovered")
+				}
+				fields := []any{
+					"msg", "compactor truncation recovered after retryable MySQL error",
 					"tenant_id", shard.TenantID,
 					"shard_id", shard.ShardID,
 					"retries", retries,
 					"retry_limit", limit,
-				)
+				}
+				fields = append(fields, truncateFailureFields(details)...)
+				_ = level.Info(s.logger).Log(fields...)
 			}
 			return deleted, limit, nil
 		}
-		if !mysqlstorage.IsRetryableLockError(err) {
-			return 0, limit, err
+		details := mysqlstorage.ClassifyError(err)
+		if !details.Retryable {
+			if ctx.Err() != nil {
+				return 0, limit, err
+			}
+			observeTruncateFailure(string(details.Class))
+			return 0, limit, newTruncateFailureError(err)
 		}
 
-		observeTruncateDeadlock("retry")
+		if details.Class == mysqlstorage.ErrorClassRetryableLock {
+			observeTruncateDeadlock("retry")
+		}
+		lastRetryErr = err
 		retries++
 		if retries > truncateRetryAttempts || time.Now().After(deadline) {
-			observeTruncateDeadlock("exhausted")
-			return 0, limit, fmt.Errorf("retryable MySQL lock error exhausted after %d retries: %w", retries, err)
+			if details.Class == mysqlstorage.ErrorClassRetryableLock {
+				observeTruncateDeadlock("exhausted")
+			}
+			observeTruncateFailure(string(details.Class))
+			return 0, limit, newTruncateFailureError(fmt.Errorf("retryable MySQL error exhausted after %d retries: %w", retries, err))
 		}
 
 		if limit > 1 {
@@ -508,6 +549,31 @@ func (s *Service) truncateCompactedWithRetry(
 			}
 		}
 	}
+}
+
+func truncateFailureLogFields(err error) []any {
+	var truncateErr *truncateFailureError
+	if !errors.As(err, &truncateErr) {
+		return nil
+	}
+	return truncateFailureFields(truncateErr.details)
+}
+
+func truncateFailureFields(details mysqlstorage.ErrorDetails) []any {
+	fields := []any{
+		"truncate_failure_class", details.Class,
+		"truncate_failure_retryable", details.Retryable,
+	}
+	if details.MySQLErrno != 0 {
+		fields = append(fields, "truncate_failure_errno", details.MySQLErrno)
+	}
+	if details.SQLState != "" {
+		fields = append(fields, "truncate_failure_sqlstate", details.SQLState)
+	}
+	if details.Message != "" {
+		fields = append(fields, "truncate_failure_message", details.Message)
+	}
+	return fields
 }
 
 func (s *Service) sleep(ctx context.Context, d time.Duration) error {
