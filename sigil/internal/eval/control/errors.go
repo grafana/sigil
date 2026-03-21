@@ -2,7 +2,6 @@ package control
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	evalpkg "github.com/grafana/sigil/sigil/internal/eval"
@@ -14,7 +13,6 @@ var (
 	ErrNotFound     = errors.New("not found")
 	ErrConflict     = errors.New("conflict")
 	ErrUnavailable  = errors.New("unavailable")
-	ErrInternal     = errors.New("internal")
 )
 
 type FieldError struct {
@@ -78,10 +76,6 @@ func ValidationError(message string, fields ...FieldError) error {
 	return newControlError(ErrValidation, message, nil, fields...)
 }
 
-func ValidationErrorf(format string, args ...any) error {
-	return newControlError(ErrValidation, fmt.Sprintf(format, args...), nil)
-}
-
 func ValidationWrap(err error, fields ...FieldError) error {
 	if err == nil {
 		return nil
@@ -97,30 +91,12 @@ func NotFoundError(message string) error {
 	return newControlError(ErrNotFound, message, nil)
 }
 
-func NotFoundWrap(err error) error {
-	if err == nil {
-		return nil
-	}
-	return newControlError(ErrNotFound, "", err)
-}
-
 func ConflictError(message string) error {
 	return newControlError(ErrConflict, message, nil)
 }
 
-func ConflictWrap(err error) error {
-	if err == nil {
-		return nil
-	}
-	return newControlError(ErrConflict, "", err)
-}
-
 func UnavailableError(message string, err error) error {
 	return newControlError(ErrUnavailable, message, err)
-}
-
-func InternalError(message string, err error) error {
-	return newControlError(ErrInternal, message, err)
 }
 
 func isValidationError(err error) bool {
