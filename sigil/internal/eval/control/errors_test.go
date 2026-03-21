@@ -53,33 +53,31 @@ func TestControlErrorHelpers(t *testing.T) {
 			t.Fatalf("expected nil control error when no message or cause, got %v", err)
 		}
 
-		err := ValidationErrorf("field %s is invalid", "x")
+		err := ValidationError("field x is invalid")
 		if !isValidationError(err) || err.Error() != "field x is invalid" {
-			t.Fatalf("unexpected ValidationErrorf result: %v", err)
+			t.Fatalf("unexpected ValidationError result: %v", err)
 		}
 
-		notFoundCause := errors.New("missing row")
-		notFound := NotFoundWrap(notFoundCause)
-		if !isNotFoundError(notFound) || !errors.Is(notFound, notFoundCause) {
-			t.Fatalf("unexpected NotFoundWrap result: %v", notFound)
+		notFound := NotFoundError("missing row")
+		if !isNotFoundError(notFound) {
+			t.Fatalf("unexpected NotFoundError result: %v", notFound)
 		}
 
-		conflictCause := errors.New("duplicate key")
-		conflict := ConflictWrap(conflictCause)
-		if !isConflictError(conflict) || !errors.Is(conflict, conflictCause) {
-			t.Fatalf("unexpected ConflictWrap result: %v", conflict)
+		conflict := ConflictError("duplicate key")
+		if !isConflictError(conflict) {
+			t.Fatalf("unexpected ConflictError result: %v", conflict)
 		}
 
-		internalCause := errors.New("db offline")
-		internal := InternalError("write failed", internalCause)
-		if !errors.Is(internal, ErrInternal) {
-			t.Fatalf("expected internal sentinel, got %v", internal)
+		unavailableCause := errors.New("db offline")
+		unavailable := UnavailableError("write failed", unavailableCause)
+		if !errors.Is(unavailable, ErrUnavailable) {
+			t.Fatalf("expected unavailable sentinel, got %v", unavailable)
 		}
-		if got := internal.Error(); got != "write failed" {
-			t.Fatalf("expected internal message, got %q", got)
+		if got := unavailable.Error(); got != "write failed" {
+			t.Fatalf("expected unavailable message, got %q", got)
 		}
-		if !errors.Is(internal, internalCause) {
-			t.Fatalf("expected wrapped internal cause, got %v", internal)
+		if !errors.Is(unavailable, unavailableCause) {
+			t.Fatalf("expected wrapped unavailable cause, got %v", unavailable)
 		}
 	})
 }
