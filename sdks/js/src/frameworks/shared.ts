@@ -22,7 +22,8 @@ type FrameworkName =
   | 'openai-agents'
   | 'llamaindex'
   | 'google-adk'
-  | 'vercel-ai-sdk';
+  | 'vercel-ai-sdk'
+  | 'claude-agent-sdk';
 
 const frameworkInstrumentationName = 'github.com/grafana/sigil/sdks/js/frameworks';
 const spanAttrOperationName = 'gen_ai.operation.name';

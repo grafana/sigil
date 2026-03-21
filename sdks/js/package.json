@@ -34,6 +34,10 @@
     "./vercel-ai-sdk": {
       "types": "./dist/frameworks/vercel-ai-sdk/index.d.ts",
       "import": "./dist/frameworks/vercel-ai-sdk/index.js"
+    },
+    "./claude-agent-sdk": {
+      "types": "./dist/frameworks/claude-agent-sdk/index.d.ts",
+      "import": "./dist/frameworks/claude-agent-sdk/index.js"
     }
   },
   "files": [

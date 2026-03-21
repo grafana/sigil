@@ -56,6 +56,7 @@ This is the canonical navigation map for repository documentation.
   - JS LlamaIndex framework guide: `../sdks/js/docs/frameworks/llamaindex.md`
   - JS Google ADK framework guide: `../sdks/js/docs/frameworks/google-adk.md`
   - JS Vercel AI SDK framework guide: `../sdks/js/docs/frameworks/vercel-ai-sdk.md`
+  - JS Claude Agent SDK framework guide: `../sdks/js/docs/frameworks/claude-agent-sdk.md`
   - .NET SDK README: `../sdks/dotnet/README.md`
   - Python SDK README: `../sdks/python/README.md`
   - Python LangChain module README: `../sdks/python-frameworks/langchain/README.md`
