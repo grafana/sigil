@@ -296,3 +296,32 @@ func TestValidateCursorFilterHash(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildAgentListFilterHashDiffersForSubsecondFilterTime(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2026, 3, 16, 10, 30, 0, 0, time.UTC)
+	oneNanoLater := base.Add(time.Nanosecond)
+
+	hashBase := buildAgentListFilterHash("assistant", base, time.Time{})
+	hashOneNanoLater := buildAgentListFilterHash("assistant", oneNanoLater, time.Time{})
+
+	if hashBase == hashOneNanoLater {
+		t.Fatalf("expected distinct hashes for sub-second filter times")
+	}
+}
+
+func TestBuildAgentListFilterHashNormalizesTimeZone(t *testing.T) {
+	t.Parallel()
+
+	utcInstant := time.Date(2026, 3, 16, 9, 30, 0, 123456789, time.UTC)
+	paris := time.FixedZone("CET", 1*60*60)
+	localInstant := utcInstant.In(paris)
+
+	hashUTC := buildAgentListFilterHash("assistant", utcInstant, time.Time{})
+	hashLocal := buildAgentListFilterHash("assistant", localInstant, time.Time{})
+
+	if hashUTC != hashLocal {
+		t.Fatalf("expected matching hashes for equivalent instants across time zones")
+	}
+}

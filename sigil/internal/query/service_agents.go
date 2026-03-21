@@ -425,11 +425,11 @@ func buildAgentListFilterHash(namePrefix string, seenAfter, seenBefore time.Time
 	h.Write([]byte(strings.TrimSpace(namePrefix)))
 	h.Write([]byte{0})
 	if !seenAfter.IsZero() {
-		h.Write([]byte(seenAfter.UTC().Format(time.RFC3339)))
+		h.Write([]byte(seenAfter.UTC().Format(time.RFC3339Nano)))
 	}
 	h.Write([]byte{0})
 	if !seenBefore.IsZero() {
-		h.Write([]byte(seenBefore.UTC().Format(time.RFC3339)))
+		h.Write([]byte(seenBefore.UTC().Format(time.RFC3339Nano)))
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
