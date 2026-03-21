@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/grafana/dskit/tenant"
+	"github.com/grafana/sigil/sigil/internal/jsonutil"
 	"github.com/grafana/sigil/sigil/internal/tenantsettings"
 )
 
@@ -62,13 +63,9 @@ func upsertTenantDatasourceSettings(settingsSvc *tenantsettings.Service) http.Ha
 		payload := struct {
 			Datasources tenantsettings.DatasourceSettings `json:"datasources"`
 		}{}
-		if req.Body != nil {
-			decoder := json.NewDecoder(req.Body)
-			decoder.DisallowUnknownFields()
-			if err := decoder.Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
-				http.Error(w, "invalid request body", http.StatusBadRequest)
-				return
-			}
+		if err := decodeOptionalJSONBody(req.Body, &payload); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
 		}
 		settings, err := settingsSvc.UpsertTenantDatasourceSettings(req.Context(), tenantID, payload.Datasources)
 		if err != nil {
@@ -79,4 +76,21 @@ func upsertTenantDatasourceSettings(settingsSvc *tenantsettings.Service) http.Ha
 			"datasources": settings,
 		})
 	}
+}
+
+func decodeOptionalJSONBody(body io.Reader, payload any) error {
+	if body == nil {
+		return nil
+	}
+
+	decoder := json.NewDecoder(body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(payload); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
+	}
+
+	return jsonutil.EnsureEOF(decoder)
 }
