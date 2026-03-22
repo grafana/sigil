@@ -15,6 +15,15 @@ const (
 	EvaluatorKindHeuristic  EvaluatorKind = "heuristic"
 )
 
+// LLMJudgeMinMaxTokens is the minimum max_tokens allowed for LLM judge
+// evaluators. Responses below this limit are likely to be truncated.
+const LLMJudgeMinMaxTokens = 256
+
+// LLMJudgeMaxMaxTokens is the maximum max_tokens a user can configure for
+// LLM judge evaluators. The runtime retry for truncated responses may
+// exceed this cap.
+const LLMJudgeMaxMaxTokens = 1024
+
 type ScoreType string
 
 const (

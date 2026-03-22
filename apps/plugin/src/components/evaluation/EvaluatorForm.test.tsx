@@ -52,7 +52,7 @@ describe('EvaluatorForm', () => {
     expect(screen.getByPlaceholderText('e.g. custom.helpfulness')).toHaveFocus();
   });
 
-  it('blocks submit when max tokens is not greater than zero', () => {
+  it('blocks submit when max tokens is below minimum', () => {
     const onSubmit = jest.fn();
     const prefill: Partial<Evaluator> = {
       evaluator_id: 'seed.judge',
@@ -60,7 +60,7 @@ describe('EvaluatorForm', () => {
       config: {
         system_prompt: 'judge this',
         user_prompt: 'score output',
-        max_tokens: 0,
+        max_tokens: 64,
         temperature: 0,
       },
       output_keys: [{ key: 'score', type: 'number' }],
@@ -71,7 +71,7 @@ describe('EvaluatorForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
     expect(onSubmit).not.toHaveBeenCalled();
-    expect(screen.getByText('Must be an integer greater than 0')).toBeInTheDocument();
+    expect(screen.getByText('Must be an integer between 256 and 1024')).toBeInTheDocument();
   });
 
   it('blocks submit when only provider is selected for llm_judge', () => {
@@ -81,7 +81,7 @@ describe('EvaluatorForm', () => {
       kind: 'llm_judge',
       config: {
         provider: 'openai',
-        max_tokens: 128,
+        max_tokens: 256,
         temperature: 0,
       },
       output_keys: [{ key: 'score', type: 'number' }],
@@ -103,7 +103,7 @@ describe('EvaluatorForm', () => {
       config: {
         system_prompt: 'judge this',
         user_prompt: 'score output',
-        max_tokens: 128,
+        max_tokens: 256,
         temperature: 2.5,
       },
       output_keys: [{ key: 'score', type: 'number' }],
@@ -180,7 +180,7 @@ describe('EvaluatorForm', () => {
       config: {
         system_prompt: 'judge this',
         user_prompt: 'score output',
-        max_tokens: 128,
+        max_tokens: 256,
         temperature: 0,
       },
       output_keys: [{ key: 'score', type: 'number', pass_threshold: 0, min: 1, max: 10 }],
@@ -202,7 +202,7 @@ describe('EvaluatorForm', () => {
       config: {
         system_prompt: 'judge this',
         user_prompt: 'score output',
-        max_tokens: 128,
+        max_tokens: 256,
         temperature: 0,
       },
       output_keys: [{ key: 'score', type: 'number', pass_threshold: 5, min: 1, max: 1 }],
@@ -224,7 +224,7 @@ describe('EvaluatorForm', () => {
       config: {
         system_prompt: 'judge this',
         user_prompt: 'score output',
-        max_tokens: 128,
+        max_tokens: 256,
         temperature: 0,
       },
       output_keys: [{ key: 'score', type: 'number', pass_threshold: 11, min: 1, max: 10 }],

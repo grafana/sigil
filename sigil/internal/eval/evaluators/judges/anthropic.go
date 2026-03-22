@@ -80,7 +80,7 @@ func (c *AnthropicClient) Judge(ctx context.Context, req JudgeRequest) (JudgeRes
 			}
 			params.Thinking = anthropic.ThinkingConfigParamOfEnabled(int64(budgetTokens))
 		default:
-			adaptive := anthropic.NewThinkingConfigAdaptiveParam()
+			adaptive := anthropic.ThinkingConfigAdaptiveParam{}
 			params.Thinking = anthropic.ThinkingConfigParamUnion{
 				OfAdaptive: &adaptive,
 			}

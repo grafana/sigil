@@ -294,7 +294,7 @@ services:
 
   mysql:
     profiles: ['core']
-    image: mysql:9.6@sha256:c1667ed4366709204bdf4514c7d979dfdbc29af43f9840def436b039eefc5f88
+    image: mysql:9.6@sha256:24e450bbd24f621c71b10404c946cc9ea1cbb0e6e7464b2be2de5193dcf1d05b
     command: --max_connections=1000
     environment:
       MYSQL_ROOT_PASSWORD: rootpass
@@ -313,7 +313,7 @@ services:
 
   tempo:
     profiles: ['core']
-    image: grafana/tempo:2.10.2@sha256:b6ade23a821c6bdb89487130dee39bd7bf6595e9fc521212ecb7878feb934d72
+    image: grafana/tempo:2.10.3@sha256:cac9de2ac9f6da8efca5b64b690a7cb8c786a0c49cac7b4517dd1b0089a6c703
     command: ['-config.file=/etc/tempo/tempo.yaml']
     ports:
       - '3200:3200'

@@ -187,6 +187,16 @@ func TestValidateLLMJudgeConfig(t *testing.T) {
 			wantErr: "max_tokens must be an integer",
 		},
 		{
+			name:    "max_tokens below minimum",
+			config:  map[string]any{"provider": "openai", "model": "gpt-4o-mini", "max_tokens": 128},
+			wantErr: "max_tokens must be at least",
+		},
+		{
+			name:    "max_tokens above maximum",
+			config:  map[string]any{"provider": "openai", "model": "gpt-4o-mini", "max_tokens": 2048},
+			wantErr: "max_tokens must be at most",
+		},
+		{
 			name:    "invalid timeout_ms value",
 			config:  map[string]any{"provider": "openai", "model": "gpt-4o-mini", "timeout_ms": 0},
 			wantErr: "timeout_ms must be an integer greater than 0",
@@ -218,7 +228,7 @@ func TestValidateLLMJudgeConfig(t *testing.T) {
 			"model":         " gpt-4o-mini ",
 			"system_prompt": " hi ",
 			"user_prompt":   " there ",
-			"max_tokens":    int64(128),
+			"max_tokens":    int64(evalpkg.LLMJudgeMinMaxTokens),
 			"timeout_ms":    int(5000),
 			"temperature":   float32(0.5),
 		}

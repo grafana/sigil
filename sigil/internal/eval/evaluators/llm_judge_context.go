@@ -315,7 +315,7 @@ func renderToolResultPart(part *sigilv1.Part) string {
 
 	body := strings.TrimSpace(result.GetContent())
 	if body == "" && len(result.GetContentJson()) > 0 {
-		body = strings.TrimSpace(string(result.GetContentJson()))
+		body = extractTextFromContentJSON(result.GetContentJson())
 	}
 	body = escapeTagText(body)
 	if body == "" {
@@ -342,6 +342,36 @@ func escapeTagText(raw string) string {
 		">", "&gt;",
 	)
 	return replacer.Replace(raw)
+}
+
+// extractTextFromContentJSON tries to extract a human-readable string from
+// a proto content_json field. It handles:
+//   - a JSON string: returns the string directly
+//   - a JSON array of {"type":"text","text":"..."} blocks: joins their text fields
+//   - anything else: returns the raw JSON string as a fallback
+func extractTextFromContentJSON(data []byte) string {
+	// Try plain string first
+	var s string
+	if json.Unmarshal(data, &s) == nil {
+		return strings.TrimSpace(s)
+	}
+	// Try array of content blocks
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(data, &blocks) == nil {
+		var parts []string
+		for _, b := range blocks {
+			if t := strings.TrimSpace(b.Text); t != "" {
+				parts = append(parts, t)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, "\n")
+		}
+	}
+	return strings.TrimSpace(string(data))
 }
 
 func escapeTagAttr(raw string) string {

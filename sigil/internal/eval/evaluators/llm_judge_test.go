@@ -54,6 +54,107 @@ func TestLLMJudgeEvaluatorParsesNumericJSON(t *testing.T) {
 	}
 }
 
+func TestLLMJudgeEvaluatorClampsMaxTokensToMinimum(t *testing.T) {
+	var capturedMaxTokens int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, _ := io.ReadAll(req.Body)
+		var payload map[string]any
+		_ = json.Unmarshal(body, &payload)
+		if mt, ok := payload["max_tokens"].(float64); ok {
+			capturedMaxTokens = int(mt)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"score\":0.5,\"explanation\":\"ok\"}"}}],"model":"m","usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_BASE_URL", server.URL)
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_API_KEY", "test")
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_ENABLED", "true")
+	discovery := judges.DiscoverFromEnv()
+	evaluator := NewLLMJudgeEvaluator(discovery, "openai-compat/m")
+
+	_, err := evaluator.Evaluate(context.Background(), EvalInput{
+		InputText:    "q",
+		ResponseText: "a",
+	}, evalpkg.EvaluatorDefinition{
+		Kind: evalpkg.EvaluatorKindLLMJudge,
+		Config: map[string]any{
+			"provider":   "openai-compat",
+			"model":      "m",
+			"max_tokens": 64,
+		},
+		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if capturedMaxTokens != evalpkg.LLMJudgeMinMaxTokens {
+		t.Fatalf("expected max_tokens clamped to %d, got %d", evalpkg.LLMJudgeMinMaxTokens, capturedMaxTokens)
+	}
+}
+
+func TestLLMJudgeEvaluatorRetriesOnTruncatedJSON(t *testing.T) {
+	var callCount int
+	var capturedMaxTokens []int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		callCount++
+		body, _ := io.ReadAll(req.Body)
+		var payload map[string]any
+		_ = json.Unmarshal(body, &payload)
+		if mt, ok := payload["max_tokens"].(float64); ok {
+			capturedMaxTokens = append(capturedMaxTokens, int(mt))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if callCount == 1 {
+			// First call: return truncated JSON
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"explanation\": \"The response makes claims but"}}],"model":"m","usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+		} else {
+			// Retry: return valid JSON
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"score\":0.7,\"explanation\":\"decent response\"}"}}],"model":"m","usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_BASE_URL", server.URL)
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_API_KEY", "test")
+	t.Setenv("SIGIL_EVAL_OPENAI_COMPAT_ENABLED", "true")
+	discovery := judges.DiscoverFromEnv()
+	evaluator := NewLLMJudgeEvaluator(discovery, "openai-compat/m")
+
+	outputs, err := evaluator.Evaluate(context.Background(), EvalInput{
+		InputText:    "q",
+		ResponseText: "a",
+	}, evalpkg.EvaluatorDefinition{
+		Kind: evalpkg.EvaluatorKindLLMJudge,
+		Config: map[string]any{
+			"provider":   "openai-compat",
+			"model":      "m",
+			"max_tokens": evalpkg.LLMJudgeMinMaxTokens,
+		},
+		OutputKeys: []evalpkg.OutputKey{{Key: "score", Type: evalpkg.ScoreTypeNumber}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if callCount != 2 {
+		t.Fatalf("expected 2 judge calls (1 retry), got %d", callCount)
+	}
+	if len(capturedMaxTokens) != 2 {
+		t.Fatalf("expected 2 max_tokens captures, got %d", len(capturedMaxTokens))
+	}
+	if capturedMaxTokens[0] != evalpkg.LLMJudgeMinMaxTokens {
+		t.Fatalf("expected first call max_tokens=%d, got %d", evalpkg.LLMJudgeMinMaxTokens, capturedMaxTokens[0])
+	}
+	if capturedMaxTokens[1] != evalpkg.LLMJudgeMinMaxTokens*2 {
+		t.Fatalf("expected retry max_tokens=%d, got %d", evalpkg.LLMJudgeMinMaxTokens*2, capturedMaxTokens[1])
+	}
+	if len(outputs) != 1 || outputs[0].Value.Number == nil || *outputs[0].Value.Number != 0.7 {
+		t.Fatalf("expected score 0.7 from retry, got %#v", outputs)
+	}
+}
+
 func TestLLMJudgeEvaluatorUsesExplicitDefaultPrompts(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -206,6 +307,59 @@ func TestRenderTemplateUsesDeveloperFacingAliases(t *testing.T) {
 		if !strings.Contains(rendered, check) {
 			t.Fatalf("expected rendered template to contain %q, got:\n%s", check, rendered)
 		}
+	}
+}
+
+func TestRenderTemplateExtractsPlainTextFromToolResultContentJSON(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentJSON string
+		wantBody    string
+	}{
+		{
+			name:        "array of text blocks",
+			contentJSON: `[{"type":"text","text":"Applied 1 operations (version=2)"}]`,
+			wantBody:    "Applied 1 operations (version=2)",
+		},
+		{
+			name:        "multiple text blocks joined",
+			contentJSON: `[{"type":"text","text":"first"},{"type":"text","text":"second"}]`,
+			wantBody:    "first\nsecond",
+		},
+		{
+			name:        "plain string",
+			contentJSON: `"simple result"`,
+			wantBody:    "simple result",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			input := EvalInput{
+				Generation: &sigilv1.Generation{
+					Input: []*sigilv1.Message{
+						{
+							Role: sigilv1.MessageRole_MESSAGE_ROLE_TOOL,
+							Parts: []*sigilv1.Part{{
+								Metadata: &sigilv1.PartMetadata{ProviderType: "tool_result"},
+								Payload: &sigilv1.Part_ToolResult{ToolResult: &sigilv1.ToolResult{
+									ToolCallId:  "call-1",
+									Name:        "my_tool",
+									ContentJson: []byte(tc.contentJSON),
+								}},
+							}},
+						},
+					},
+				},
+			}
+			rendered := renderTemplate("Results={{tool_results}}", input)
+			if !strings.Contains(rendered, tc.wantBody) {
+				t.Fatalf("expected plain text %q in rendered output, got:\n%s", tc.wantBody, rendered)
+			}
+			if strings.Contains(rendered, `"type"`) || strings.Contains(rendered, `"text"`) {
+				t.Fatalf("expected no raw JSON keys in rendered output, got:\n%s", rendered)
+			}
+		})
 	}
 }
 
@@ -478,6 +632,42 @@ func TestParseJudgeResponseRejectsMalformedJSONSchemaWithoutFallback(t *testing.
 	}
 	if !strings.Contains(err.Error(), "did not include score") {
 		t.Fatalf("expected missing score error, got %v", err)
+	}
+}
+
+func TestParseJudgeResponseRejectsTruncatedJSON(t *testing.T) {
+	tests := []struct {
+		name      string
+		raw       string
+		scoreType evalpkg.ScoreType
+	}{
+		{
+			name:      "truncated_string_response",
+			raw:       `{"explanation": "The response makes claims but`,
+			scoreType: evalpkg.ScoreTypeString,
+		},
+		{
+			name:      "truncated_number_response",
+			raw:       `{"score": 7, "explanation": "decent but`,
+			scoreType: evalpkg.ScoreTypeNumber,
+		},
+		{
+			name:      "truncated_array_response",
+			raw:       `[{"score": 1},`,
+			scoreType: evalpkg.ScoreTypeNumber,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, _, err := parseJudgeResponse(tc.raw, "score", tc.scoreType)
+			if err == nil {
+				t.Fatalf("expected error for truncated JSON")
+			}
+			if !strings.Contains(err.Error(), "truncated JSON") {
+				t.Fatalf("expected truncated JSON error, got: %v", err)
+			}
+		})
 	}
 }
 

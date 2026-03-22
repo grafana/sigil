@@ -7,6 +7,7 @@ import {
   JSON_SCHEMA_SUPPORTED_KEYWORDS,
   LLM_JUDGE_DEFAULT_SYSTEM_PROMPT,
   LLM_JUDGE_DEFAULT_USER_PROMPT,
+  LLM_JUDGE_MIN_MAX_TOKENS,
   LLM_JUDGE_USER_PROMPT_VARIABLES_DESCRIPTION,
   buildOutputKeyFromForm,
   getDefaultOutputKey,
@@ -199,7 +200,7 @@ function parseEvaluatorToFormState(
     description: e.description ?? '',
     systemPrompt: normalizedOptionalString(cfg.system_prompt) ?? '',
     userPrompt: normalizedOptionalString(cfg.user_prompt) ?? '',
-    maxTokens: (cfg.max_tokens as number) ?? 128,
+    maxTokens: (cfg.max_tokens as number) ?? LLM_JUDGE_MIN_MAX_TOKENS,
     temperature: (cfg.temperature as number) ?? 0,
     schemaJson: typeof cfg.schema === 'object' ? JSON.stringify(cfg.schema, null, 2) : '{}',
     pattern: (cfg.pattern as string) ?? '',
@@ -255,7 +256,7 @@ export default function EvaluatorForm({
   const [modelOptions, setModelOptions] = useState<Array<SelectableValue<string>>>([]);
   const [systemPrompt, setSystemPrompt] = useState(initialState?.systemPrompt ?? '');
   const [userPrompt, setUserPrompt] = useState(initialState?.userPrompt ?? '');
-  const [maxTokens, setMaxTokens] = useState(initialState?.maxTokens ?? 128);
+  const [maxTokens, setMaxTokens] = useState(initialState?.maxTokens ?? LLM_JUDGE_MIN_MAX_TOKENS);
   const [temperature, setTemperature] = useState(initialState?.temperature ?? 0);
 
   // Load judge providers on mount

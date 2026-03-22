@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ConversationsDataSource } from '../../conversation/api';
 import type { EvaluationDataSource } from '../../evaluation/api';
+import { LLM_JUDGE_MIN_MAX_TOKENS } from '../../evaluation/types';
 import EvalTestPanel from './EvalTestPanel';
 
 jest.mock('./GenerationPicker', () => ({
@@ -60,7 +61,7 @@ describe('EvalTestPanel', () => {
     render(
       <EvalTestPanel
         kind="llm_judge"
-        config={{ provider: 'openai', model: 'gpt-4o-mini', max_tokens: 128, temperature: 0 }}
+        config={{ provider: 'openai', model: 'gpt-4o-mini', max_tokens: LLM_JUDGE_MIN_MAX_TOKENS, temperature: 0 }}
         outputKeys={[{ key: 'score', type: 'number' }]}
         dataSource={dataSource}
         conversationsDataSource={conversationsDataSource}
@@ -103,7 +104,7 @@ describe('EvalTestPanel', () => {
     render(
       <EvalTestPanel
         kind="llm_judge"
-        config={{ max_tokens: 128, temperature: 0 }}
+        config={{ max_tokens: LLM_JUDGE_MIN_MAX_TOKENS, temperature: 0 }}
         outputKeys={[{ key: 'score', type: 'number' }]}
         dataSource={dataSource}
         conversationsDataSource={conversationsDataSource}
@@ -128,7 +129,7 @@ describe('EvalTestPanel', () => {
     await waitFor(() =>
       expect(dataSource.testEval).toHaveBeenCalledWith({
         kind: 'llm_judge',
-        config: { max_tokens: 128, temperature: 0, model: 'openai/gpt-4o-mini' },
+        config: { max_tokens: LLM_JUDGE_MIN_MAX_TOKENS, temperature: 0, model: 'openai/gpt-4o-mini' },
         output_keys: [{ key: 'score', type: 'number' }],
         generation_id: 'gen-1',
         generation_data: {

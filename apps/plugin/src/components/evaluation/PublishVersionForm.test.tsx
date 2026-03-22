@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { EvaluationDataSource } from '../../evaluation/api';
+import { LLM_JUDGE_MIN_MAX_TOKENS } from '../../evaluation/types';
 import PublishVersionForm from './PublishVersionForm';
 
 const mockDataSource = {
@@ -15,7 +16,7 @@ describe('PublishVersionForm', () => {
     render(
       <PublishVersionForm
         kind="llm_judge"
-        initialConfig={{ provider: 'openai', max_tokens: 128, temperature: 0 }}
+        initialConfig={{ provider: 'openai', max_tokens: LLM_JUDGE_MIN_MAX_TOKENS, temperature: 0 }}
         initialOutputKeys={[{ key: 'score', type: 'number' }]}
         onSubmit={onSubmit}
         onCancel={jest.fn()}

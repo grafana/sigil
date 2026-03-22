@@ -234,8 +234,11 @@ func validateLLMJudgeConfig(config map[string]any) error {
 	if err != nil {
 		return err
 	}
-	if hasMaxTokens && maxTokens <= 0 {
-		return errors.New("llm_judge config max_tokens must be an integer greater than 0")
+	if hasMaxTokens && maxTokens < evalpkg.LLMJudgeMinMaxTokens {
+		return fmt.Errorf("llm_judge config max_tokens must be at least %d", evalpkg.LLMJudgeMinMaxTokens)
+	}
+	if hasMaxTokens && maxTokens > evalpkg.LLMJudgeMaxMaxTokens {
+		return fmt.Errorf("llm_judge config max_tokens must be at most %d", evalpkg.LLMJudgeMaxMaxTokens)
 	}
 
 	timeoutMs, hasTimeoutMs, err := normalizeOptionalInt(config, "timeout_ms")
