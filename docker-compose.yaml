@@ -313,7 +313,7 @@ services:
 
   tempo:
     profiles: ['core']
-    image: grafana/tempo:2.10.2@sha256:b6ade23a821c6bdb89487130dee39bd7bf6595e9fc521212ecb7878feb934d72
+    image: grafana/tempo:2.10.3@sha256:cac9de2ac9f6da8efca5b64b690a7cb8c786a0c49cac7b4517dd1b0089a6c703
     command: ['-config.file=/etc/tempo/tempo.yaml']
     ports:
       - '3200:3200'
