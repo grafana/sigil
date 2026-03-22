@@ -518,7 +518,10 @@ func formatCursor(cursor uint64) string {
 }
 
 func pathID(path string, prefix string) (string, bool) {
-	trimmed := strings.TrimPrefix(path, prefix)
+	trimmed, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", false
+	}
 	if trimmed == "" || strings.Contains(trimmed, "/") {
 		return "", false
 	}
@@ -532,7 +535,10 @@ func pathIDEscaped(req *http.Request, prefix string) (string, bool) {
 	if path == "" {
 		path = req.URL.Path
 	}
-	trimmed := strings.TrimPrefix(path, prefix)
+	trimmed, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", false
+	}
 	if trimmed == "" {
 		return "", false
 	}
@@ -549,7 +555,10 @@ func pathIDEscaped(req *http.Request, prefix string) (string, bool) {
 }
 
 func pathIDAction(path string, prefix string) (string, string, bool) {
-	trimmed := strings.TrimPrefix(path, prefix)
+	trimmed, ok := strings.CutPrefix(path, prefix)
+	if !ok {
+		return "", "", false
+	}
 	if trimmed == "" || strings.Contains(trimmed, "/") {
 		return "", "", false
 	}

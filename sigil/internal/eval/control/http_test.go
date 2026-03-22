@@ -223,6 +223,107 @@ func TestDecodeJSONBody_TypeErrorDoesNotLeakStructNames(t *testing.T) {
 	}
 }
 
+func TestPathID(t *testing.T) {
+	t.Parallel()
+
+	const prefix = "/api/v1/eval/evaluators/"
+	tests := []struct {
+		name  string
+		path  string
+		want  string
+		valid bool
+	}{
+		{name: "valid id", path: "/api/v1/eval/evaluators/custom.helpfulness", want: "custom.helpfulness", valid: true},
+		{name: "missing id", path: "/api/v1/eval/evaluators/", valid: false},
+		{name: "nested path rejected", path: "/api/v1/eval/evaluators/custom/helpfulness", valid: false},
+		{name: "prefix mismatch rejected", path: "/api/v1/eval/rules/custom.helpfulness", valid: false},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, ok := pathID(tc.path, prefix)
+			if ok != tc.valid {
+				t.Fatalf("expected valid=%t, got %t (id=%q)", tc.valid, ok, got)
+			}
+			if got != tc.want {
+				t.Fatalf("expected id=%q, got %q", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestPathIDAction(t *testing.T) {
+	t.Parallel()
+
+	const prefix = "/api/v1/eval/predefined/evaluators/"
+	tests := []struct {
+		name       string
+		path       string
+		wantID     string
+		wantAction string
+		valid      bool
+	}{
+		{name: "valid action path", path: "/api/v1/eval/predefined/evaluators/summary.v1:fork", wantID: "summary.v1", wantAction: "fork", valid: true},
+		{name: "missing action separator", path: "/api/v1/eval/predefined/evaluators/summary.v1", valid: false},
+		{name: "nested path rejected", path: "/api/v1/eval/predefined/evaluators/summary/v1:fork", valid: false},
+		{name: "prefix mismatch rejected", path: "/api/v1/eval/evaluators/summary.v1:fork", valid: false},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			id, action, ok := pathIDAction(tc.path, prefix)
+			if ok != tc.valid {
+				t.Fatalf("expected valid=%t, got %t (id=%q action=%q)", tc.valid, ok, id, action)
+			}
+			if id != tc.wantID {
+				t.Fatalf("expected id=%q, got %q", tc.wantID, id)
+			}
+			if action != tc.wantAction {
+				t.Fatalf("expected action=%q, got %q", tc.wantAction, action)
+			}
+		})
+	}
+}
+
+func TestPathIDEscaped(t *testing.T) {
+	t.Parallel()
+
+	const prefix = "/api/v1/eval/rules/"
+	tests := []struct {
+		name  string
+		url   string
+		want  string
+		valid bool
+	}{
+		{name: "plain id", url: "/api/v1/eval/rules/rule_a", want: "rule_a", valid: true},
+		{name: "escaped slash id", url: "/api/v1/eval/rules/rule%2Fwith%2Fslash", want: "rule/with/slash", valid: true},
+		{name: "nested path rejected without escaped slash", url: "/api/v1/eval/rules/rule/with/slash", valid: false},
+		{name: "prefix mismatch rejected", url: "/api/v1/eval/evaluators/rule_a", valid: false},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			req := httptest.NewRequest(http.MethodGet, tc.url, nil)
+			got, ok := pathIDEscaped(req, prefix)
+			if ok != tc.valid {
+				t.Fatalf("expected valid=%t, got %t (id=%q)", tc.valid, ok, got)
+			}
+			if got != tc.want {
+				t.Fatalf("expected id=%q, got %q", tc.want, got)
+			}
+		})
+	}
+}
+
 func TestDeleteEvaluatorRejectsEnabledRuleReferences(t *testing.T) {
 	store := newMemoryControlStore()
 	if err := store.CreateEvaluator(context.Background(), evalpkg.EvaluatorDefinition{
